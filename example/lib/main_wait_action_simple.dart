@@ -99,10 +99,12 @@ class IncrementAndGetDescriptionAction extends ReduxAction<AppState> {
 
   // The wait starts here. We add the action itself (`this`)
   // as a wait-flag reference.
+  @override
   void before() => dispatch(WaitAction.add(this));
 
   // The wait ends here. We remove the action from the
   // wait-flag references.
+  @override
   void after() => dispatch(WaitAction.remove(this));
 }
 
@@ -119,14 +121,14 @@ class IncrementAction extends ReduxAction<AppState> {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-/// This widget connects the dumb-widget (`MyHomePage`) with the store.
+/// This widget is a connector. It connects the store to "dumb-widget".
 class MyHomePageConnector extends StatelessWidget {
   MyHomePageConnector({Key key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return StoreConnector<AppState, ViewModel>(
-      model: ViewModel(),
+      vm: Factory(this),
       builder: (BuildContext context, ViewModel vm) => MyHomePage(
         counter: vm.counter,
         description: vm.description,
@@ -137,23 +139,12 @@ class MyHomePageConnector extends StatelessWidget {
   }
 }
 
-class ViewModel extends BaseModel<AppState> {
-  ViewModel();
-
-  int counter;
-  String description;
-  bool waiting;
-  VoidCallback onIncrement;
-
-  ViewModel.build({
-    @required this.counter,
-    @required this.description,
-    @required this.waiting,
-    @required this.onIncrement,
-  }) : super(equals: [counter, description, waiting]);
+/// Factory that creates a view-model for the StoreConnector.
+class Factory extends VmFactory<AppState, MyHomePageConnector> {
+  Factory(widget) : super(widget);
 
   @override
-  ViewModel fromStore() => ViewModel.build(
+  ViewModel fromStore() => ViewModel(
         counter: state.counter,
         description: state.description,
 
@@ -162,6 +153,21 @@ class ViewModel extends BaseModel<AppState> {
 
         onIncrement: () => dispatch(IncrementAndGetDescriptionAction()),
       );
+}
+
+/// The view-model holds the part of the Store state the dumb-widget needs.
+class ViewModel extends Vm {
+  final int counter;
+  final String description;
+  final bool waiting;
+  final VoidCallback onIncrement;
+
+  ViewModel({
+    @required this.counter,
+    @required this.description,
+    @required this.waiting,
+    @required this.onIncrement,
+  }) : super(equals: [counter, description, waiting]);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -185,16 +191,22 @@ class MyHomePage extends StatelessWidget {
     return Stack(
       children: [
         Scaffold(
-          appBar: AppBar(title: Text('Wait Action Example')),
+          appBar: AppBar(title: const Text('Wait Action Example')),
           body: Center(
-              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Text('You have pushed the button this many times:'),
-            Text('$counter', style: TextStyle(fontSize: 30)),
-            Text(description, style: TextStyle(fontSize: 15), textAlign: TextAlign.center),
-          ])),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text('You have pushed the button this many times:'),
+                Text('$counter', style: const TextStyle(fontSize: 30)),
+                Text(description,
+                    style: const TextStyle(fontSize: 15),
+                    textAlign: TextAlign.center),
+              ],
+            ),
+          ),
           floatingActionButton: FloatingActionButton(
             onPressed: onIncrement,
-            child: Icon(Icons.add),
+            child: const Icon(Icons.add),
           ),
         ),
         if (waiting) ModalBarrier(color: Colors.red.withOpacity(0.4)),

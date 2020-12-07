@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
-
 import 'package:async_redux/async_redux.dart';
+import 'package:async_redux/local_persist.dart';
 import 'package:flutter/material.dart';
 import "package:test/test.dart";
 
@@ -346,7 +346,7 @@ void main() {
     var persist = LocalPersist("obj");
     await persist.save(simpleObjs);
 
-    var error;
+    dynamic error;
     try {
       await persist.loadAsObj();
     } catch (_error) {

@@ -34,7 +34,10 @@ abstract class Persistor<St> {
 
   Future<void> deleteState();
 
-  Future<void> persistDifference({@required St lastPersistedState, @required St newState});
+  Future<void> persistDifference({
+    @required St lastPersistedState,
+    @required St newState,
+  });
 
   Future<void> saveInitialState(St state) =>
       persistDifference(lastPersistedState: null, newState: state);
@@ -53,7 +56,7 @@ abstract class Persistor<St> {
 /// ```
 ///
 class PersistorPrinterDecorator<T> extends Persistor<T> {
-  Persistor _persistor;
+  final Persistor _persistor;
 
   PersistorPrinterDecorator(this._persistor);
 
@@ -122,7 +125,11 @@ class PersistException implements Exception {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is PersistException && runtimeType == other.runtimeType && error == other.error;
+      other is PersistException //
+          &&
+          runtimeType == other.runtimeType //
+          &&
+          error == other.error;
 
   @override
   int get hashCode => error.hashCode;

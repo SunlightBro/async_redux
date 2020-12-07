@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:file/file.dart' hide File;
 import 'package:async_redux/async_redux.dart';
 import 'package:file/local.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
+import 'package:file/file.dart' as f;
 import 'package:path_provider/path_provider.dart';
 
 // Developed by Marcelo Glasberg (Nov 2019).
@@ -46,7 +46,7 @@ class LocalPersist {
   // which may contain many objects.
   static const maxJsonSize = 256 * 256;
 
-  static FileSystem _fileSystem = const LocalFileSystem();
+  static f.FileSystem _fileSystem = const LocalFileSystem();
 
   final String dbName, dbSubDir;
 
@@ -77,10 +77,9 @@ class LocalPersist {
   /// — If you mock the file-system (see method `setFileSystem()`)
   /// it will save to `fileSystem.systemTempDirectory`.
   ///
-  LocalPersist(Object dbName, {String dbSubDir, List<Object> subDirs})
+  LocalPersist(Object dbName, {this.dbSubDir, List<Object> subDirs})
       : assert(dbName != null),
         dbName = _getStringFromEnum(dbName),
-        dbSubDir = dbSubDir,
         subDirs = subDirs?.map((s) => _getStringFromEnum(s))?.toList(),
         _file = null;
 
@@ -95,8 +94,8 @@ class LocalPersist {
   /// Saves the given simple objects.
   /// If [append] is false (the default), the file will be overwritten.
   /// If [append] is true, it will write to the end of the file.
-  Future<File> save(List<Object> simpleObjs, {bool append: false}) async {
-    File file = this._file ?? await this.file();
+  Future<File> save(List<Object> simpleObjs, {bool append = false}) async {
+    File file = _file ?? await this.file();
     await file.create(recursive: true);
 
     Uint8List encoded = LocalPersist.encode(simpleObjs);
@@ -112,7 +111,7 @@ class LocalPersist {
   /// If the file doesn't exist, returns null.
   /// If the file exists and is empty, returns an empty list.
   Future<List<Object>> load() async {
-    File file = this._file ?? await this.file();
+    File file = _file ?? await this.file();
 
     if (!file.existsSync())
       return null;
@@ -121,8 +120,8 @@ class LocalPersist {
       try {
         encoded = await file.readAsBytes();
       } catch (error) {
-        if ((error is FileSystemException) && error.message.contains("No such file or directory"))
-          return null;
+        if ((error is FileSystemException) && //
+            error.message.contains("No such file or directory")) return null;
         rethrow;
       }
 
@@ -148,7 +147,7 @@ class LocalPersist {
   /// If the file was deleted, returns true.
   /// If the file did not exist, return false.
   Future<bool> delete() async {
-    File file = this._file ?? await this.file();
+    File file = _file ?? await this.file();
 
     if (!file.existsSync())
       return false;
@@ -157,8 +156,8 @@ class LocalPersist {
         await file.delete(recursive: true);
         return true;
       } catch (error) {
-        if ((error is FileSystemException) && error.message.contains("No such file or directory"))
-          return false;
+        if ((error is FileSystemException) && //
+            error.message.contains("No such file or directory")) return false;
         rethrow;
       }
     }
@@ -167,7 +166,7 @@ class LocalPersist {
   /// Returns the file length.
   /// If the file doesn't exist, or exists and is empty, returns 0.
   Future<int> length() async {
-    File file = this._file ?? await this.file();
+    File file = _file ?? await this.file();
 
     if (!file.existsSync())
       return 0;
@@ -175,8 +174,8 @@ class LocalPersist {
       try {
         return file.length();
       } catch (error) {
-        if ((error is FileSystemException) && error.message.contains("No such file or directory"))
-          return 0;
+        if ((error is FileSystemException) && //
+            error.message.contains("No such file or directory")) return 0;
         rethrow;
       }
     }
@@ -184,7 +183,7 @@ class LocalPersist {
 
   /// Returns true if the file exist. False, otherwise.
   Future<bool> exists() async {
-    File file = this._file ?? await this.file();
+    File file = _file ?? await this.file();
     return file.existsSync();
   }
 
@@ -194,15 +193,20 @@ class LocalPersist {
       return _file;
     else {
       if (_appDocDir == null) await _findAppDocDir();
-      String pathNameStr = pathName(dbName, dbSubDir: dbSubDir, subDirs: subDirs);
+      String pathNameStr = pathName(
+        dbName,
+        dbSubDir: dbSubDir,
+        subDirs: subDirs,
+      );
       _file = _fileSystem.file(pathNameStr);
       return _file;
     }
   }
 
-  static String simpleObjsToString(List<Object> simpleObjs) => simpleObjs == null
-      ? simpleObjs
-      : simpleObjs.map((obj) => "$obj (${obj.runtimeType})").join("\n");
+  static String simpleObjsToString(List<Object> simpleObjs) => //
+      simpleObjs == null
+          ? simpleObjs
+          : simpleObjs.map((obj) => "$obj (${obj.runtimeType})").join("\n");
 
   static String pathName(
     String dbName, {
@@ -243,7 +247,7 @@ class LocalPersist {
   }
 
   static Iterable<String> objsToJsons(List<Object> simpleObjs) {
-    var jsonEncoder = JsonEncoder();
+    var jsonEncoder = const JsonEncoder();
     return simpleObjs.map((j) => jsonEncoder.convert(j));
   }
 
@@ -251,7 +255,7 @@ class LocalPersist {
     List<Uint8List> chunks = [];
 
     for (String json in jsons) {
-      Utf8Encoder encoder = Utf8Encoder();
+      Utf8Encoder encoder = const Utf8Encoder();
       Uint8List bytes = encoder.convert(json);
       var size = bytes.length;
 
@@ -289,12 +293,12 @@ class LocalPersist {
   }
 
   static Iterable<String> uint8ListsToJsons(Iterable<Uint8List> chunks) {
-    var utf8Decoder = Utf8Decoder();
+    var utf8Decoder = const Utf8Decoder();
     return chunks.map((readChunks) => utf8Decoder.convert(readChunks));
   }
 
   static Iterable<Object> toSimpleObjs(Iterable<String> jsons) {
-    var jsonDecoder = JsonDecoder();
+    var jsonDecoder = const JsonDecoder();
     return jsons.map((json) => jsonDecoder.convert(json));
   }
 
@@ -306,7 +310,7 @@ class LocalPersist {
   ///  ...
   /// expect(mfs.file('myPic.jpg').readAsBytesSync(), List.filled(100, 0));
   /// ```
-  static void setFileSystem(FileSystem fileSystem) {
+  static void setFileSystem(f.FileSystem fileSystem) {
     assert(fileSystem != null);
     _fileSystem = fileSystem;
   }

@@ -6,11 +6,14 @@ import 'package:flutter/material.dart';
 
 Store<int> store;
 
-/// This example shows how to use the same `ViewModel` architecture of flutter_redux.
-/// This is specially useful if you are migrating from flutter_redux.
+/// This example shows how to use the same view-model architecture of the
+/// flutter_redux package. This is specially useful if you are migrating
+/// from flutter_redux.
+///
 /// Here, you use the `StoreConnector`'s `converter` parameter,
-/// instead of the `model` parameter.
-/// And `ViewModel` doesn't extend `BaseModel`, but has a static factory:
+/// instead of the `vm` parameter.
+/// Your `ViewModel` class may or may not extend `Vm`,
+/// but it must have a static factory method, usually named `fromStore`:
 ///
 /// `converter: (store) => ViewModel.fromStore(store)`.
 ///
@@ -34,7 +37,7 @@ class MyApp extends StatelessWidget {
 class IncrementAction extends ReduxAction<int> {
   final int amount;
 
-  IncrementAction({this.amount}) : assert(amount != null);
+  IncrementAction({@required this.amount}) : assert(amount != null);
 
   @override
   int reduce() => state + amount;
@@ -42,7 +45,7 @@ class IncrementAction extends ReduxAction<int> {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-/// This widget connects the dumb-widget (`MyHomePage`) with the store.
+/// This widget is a connector. It connects the store to "dumb-widget".
 class MyHomePageConnector extends StatelessWidget {
   MyHomePageConnector({Key key}) : super(key: key);
 
@@ -58,32 +61,23 @@ class MyHomePageConnector extends StatelessWidget {
   }
 }
 
-/// Helper class to the connector widget. Holds the part of the State the widget needs,
-/// and may perform conversions to the type of data the widget can conveniently work with.
-class ViewModel {
-  int counter;
-  VoidCallback onIncrement;
+/// The view-model holds the part of the Store state the dumb-widget needs.
+class ViewModel extends Vm {
+  final int counter;
+  final VoidCallback onIncrement;
 
   ViewModel({
     @required this.counter,
     @required this.onIncrement,
-  });
+  }) : super(equals: [counter]);
 
-  /// Static factory called by the StoreConnector.
+  /// Static factory called by the StoreConnector's converter parameter.
   static ViewModel fromStore(Store<int> store) {
     return ViewModel(
       counter: store.state,
       onIncrement: () => store.dispatch(IncrementAction(amount: 1)),
     );
   }
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is ViewModel && runtimeType == other.runtimeType && counter == other.counter;
-
-  @override
-  int get hashCode => counter.hashCode;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -102,17 +96,21 @@ class MyHomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Static Factory ViewModel Example'),
+        title: const Text('Static Factory ViewModel Example'),
         backgroundColor: Colors.green,
       ),
       body: Center(
-          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text('You have pushed the button this many times:'),
-        Text('$counter', style: TextStyle(fontSize: 30))
-      ])),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text('You have pushed the button this many times:'),
+            Text('$counter', style: const TextStyle(fontSize: 30))
+          ],
+        ),
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: onIncrement,
-        child: Icon(Icons.add),
+        child: const Icon(Icons.add),
         backgroundColor: Colors.green,
       ),
     );

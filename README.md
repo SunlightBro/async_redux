@@ -33,6 +33,7 @@ For an overview, go to the <a href="https://medium.com/@marcglasberg/https-mediu
       * [Converting third-party errors into UserExceptions](#converting-third-party-errors-into-userexceptions)
       * [UserExceptionAction](#userexceptionaction)   
    * [Testing](#testing)
+      * [Mocking actions and reducers](#mocking-actions-and-reducers)
       * [Testing UserExceptions](#testing-userexceptions)
       * [Test files](#test-files)   
    * [Route Navigation](#route-navigation)
@@ -45,6 +46,7 @@ For an overview, go to the <a href="https://medium.com/@marcglasberg/https-mediu
    * [Waiting until the state meets a certain condition](#waiting-until-the-state-meets-a-certain-condition)
    * [State Declaration](#state-declaration)
       * [Selectors](#selectors)             
+      * [Cache (Reselectors)](#cache-reselectors)             
    * [Action Subclassing](#action-subclassing)
       * [Abstract Before and After](#abstract-before-and-after)
    * [IDE Navigation](#ide-navigation)
@@ -66,6 +68,8 @@ For an overview, go to the <a href="https://medium.com/@marcglasberg/https-mediu
       * [Is AsyncRedux a minimalist or lightweight Redux version?](#is-asyncredux-a-minimalist-or-lightweight-redux-version)
       * [Is the AsyncRedux architecture useful for small projects?](#is-the-asyncredux-architecture-useful-for-small-projects)
 
+<br>
+
 ## What is Redux?
 
 A single **store** holds all the **state**, which is immutable.
@@ -73,6 +77,8 @@ When you need to modify some state you **dispatch** an **action**.
 Then a **reducer** creates a new copy of the state, with the desired changes.
 Your widgets are **connected** to the store (through **store-connectors** and **view-models**),
 so they know that the state changed, and rebuild as needed.
+
+<br>
 
 ## Why use this Redux version over others?
 
@@ -125,6 +131,8 @@ However, this state must be in the `ScrollController`, not the store.
 * It helps you show errors thrown by reducers to the user.
 * It's easy to add both logging and store persistence.
 
+<br>
+
 ## Store and State
 
 Declare your store and state, like this:
@@ -141,6 +149,7 @@ Note: _Your state can be any immutable object,
 but typically you create a class called `AppState` to help with the state creation and manipulation.
 I later give some [recommendations](#state-declaration) on how to create this class._ 
 
+<br>
 
 ## Actions
 
@@ -154,6 +163,8 @@ The reducer has direct access to:
  - The store state (which is a getter of the `Action` class).
  - The action state itself (the class fields, passed to the action when it was instantiated and dispatched).
  - The `dispatch` method, so that other actions may be dispatched from the reducer.
+
+<br>
 
 ### Sync Reducer
 
@@ -189,12 +200,15 @@ We will show you later how to easily test sync reducers, using the **StoreTester
 
 Try running the: <a href="https://github.com/marcglasberg/async_redux/blob/master/example/lib/main.dart">Increment Example</a>.
 
+<br>
+
 ### Async Reducer
 
 If you want to do some asynchronous work, simply declare the reducer to return `Future<AppState>`
 then change the state and return it. There is no need of any "middleware", like for other Redux versions.
 
-Note: In IntelliJ, to convert the reducer from sync to async, press `Alt+ENTER` and select `Convert to async function body`.
+Note: In IntelliJ, to convert the reducer from sync to async, 
+press `Alt+ENTER` and select `Convert to async function body`.
 
 As an example, suppose you want to increment a counter by a value you get from the database.
 The database access is async, so you must use an async reducer:
@@ -216,47 +230,37 @@ This action is dispatched like this:
 store.dispatch(QueryAndIncrementAction());
 ```
 
+Please note: While the `reduce()` method of a *sync* reducer runs synchronously with the dispatch, 
+the `reduce()` method of an *async* reducer will not be called immediately, 
+but will be scheduled in a later task. 
+
 We will show you later how to easily test async reducers, using the **StoreTester**.
 
 Try running the: <a href="https://github.com/marcglasberg/async_redux/blob/master/example/lib/main_increment_async.dart">Increment Async Example</a>.
 
 #### One important rule
 
-When your reducer returns `Future<AppState>` you must make sure you **do not return a completed future**.
-In other words, all execution paths of the reducer must pass through at least one `await` keyword.
+The abstract `ReduxAction.reduce()` method signature has a return type of `FutureOr<AppState>`,
+but your concrete reducers must return one or the other: `AppState` or `Future<AppState>`.
 
-If your reducer has no `await`s, you must return `AppState` instead of `Future<AppState>`, 
-or simply add something like `await Future.sync(() {});`.   
+That's necessary because AsyncRedux knows if a reducer is sync or async not by checking the returned type,
+but by checking your `reducer()` method signature. 
+If it is `FutureOr<AppState>`, AsyncRedux can't know if it's sync or async, 
+and will throw a `StoreException`:
 
-Example:
-
-```dart 
-// These are right:
-AppState reduce() { return state; }
-AppState reduce() { someFunc(); return state; }
-Future<AppState> reduce() async { await someFuture(); return state; }
-Future<AppState> reduce() async { await Future.value(null); return state; }
-
-// But these are wrong:
-Future<AppState> reduce() async { return state; }
-Future<AppState> reduce() async { someFunc(); return state; }
-Future<AppState> reduce() async { if (state.someBool) await someFuture(); return state; }
+```
+Reducer should return `St` or `Future<St>`. Do not return `FutureOr<St>`.
 ```
 
-Dart doesn't let AsyncRedux detect if a future is completed or not 
-(the information is there, but in a private field), so we can't help you with that.
-One day we'll have an IDE plugin to warn you if you make this mistake, but until then, please pay attention.
-
-If you don't follow this rule, AsyncRedux may seem to work ok, but will eventually misbehave.
-If you're an advanced user interested in the details, check the 
-<a href="https://github.com/marcglasberg/async_redux/blob/master/test/sync_async_test.dart">sync/async tests</a>.   
+<br>
 
 ### Changing state is optional
 
 For both sync and async reducers, returning a new state is optional.
 If you don't plan on changing the state, simply return `null`. This is the same as returning the state unchanged.
 
-Why is this useful?  Because some actions may simply start other async processes, or dispatch other actions.
+Why is this useful?
+Because some actions may simply start other async processes, or dispatch other actions.
 
 For example, suppose you want to have two separate actions, one for querying some value from the database,
 and another action to change the state:
@@ -287,6 +291,8 @@ class IncrementAction extends ReduxAction<AppState> {
 
 Note the `reduce()` methods have direct access to `state` and `dispatch`. 
 There is no need to write `store.state` and `store.dispatch` (although you can, if you want). 
+
+<br>
 
 ### Before and After the Reducer 
 
@@ -330,10 +336,14 @@ Note: If this method runs asynchronously, then `reduce()` will also be async,
 since it must wait for this one to finish.
 
 The `after()` method runs after `reduce()`, even if an error was thrown by `before()` or `reduce()`
-(akin to a "finally" block). If the `after()` method itself throws an error,
-then this error will be "swallowed" and ignored. Avoid `after()` methods which can throw errors.
+(akin to a "finally" block). 
 
-This method can also dispatch actions, so it can be used to turn off some modal barrier
+Avoid `after()` methods which can throw errors.
+If the `after()` method throws an error, 
+then this error will be thrown *asynchronously* (after the "asynchronous gap")
+so that it doesn't interfere with the action. Also, this error will be missing the original stacktrace.  
+
+The `after()` method can also dispatch actions, so it can be used to turn off some modal barrier
 when the reducer ends, even if there was some error in the process:
 
 ```dart
@@ -360,6 +370,50 @@ class IncrementAndGetDescriptionAction extends ReduxAction<AppState> {
 ```
 
 Try running the: <a href="https://github.com/marcglasberg/async_redux/blob/master/example/lib/main_before_and_after.dart">Before and After Example</a>.
+
+#### Wrapping the reducer
+
+You may wrap the reducer to allow for some pre or post-processing.
+For example, suppose you want to abort the reducer if the state changed since while the reducer was running:
+
+```dart
+Reducer<St> wrapReduce(Reducer<St> reduce) => () async {
+   var oldState = state; // Remember: `state` is a getter for the current state.
+   AppState newState = await reduce(); // This may take some time, and meanwhile the state may change. 
+   return identical(oldState, state) ? newState : null;
+};
+```
+
+#### Aborting the dispatch
+
+You may override the action's `abortDispatch` to completely prevent the action to run if some condition is true;
+In more detail, if this method returns `true`, methods `before`, `reduce` and `after` will not be called, 
+and the action will not be visible to the `StoreTester`. 
+This is only useful under rare circumstances, and you should only use it if you know what you are doing.
+For example:
+
+```dart
+@override
+bool abortDispatch() => state.user.name == null;
+```
+
+
+#### Action status
+
+Although is unlikely you ever need it, 
+you can check if some action finished executing its methods `before`, `reduce` and `after`: 
+
+```dart       
+var action = MyAction();
+store.dispatch(action);
+print(action.status.isBeforeDone);
+print(action.status.isReduceDone);
+print(action.status.isAfterDone);
+print(action.hasFinished);
+```
+
+Method `hasFinished` returns `true` only if the action finished with no errors 
+(in other words, if methods `before`, `reduce` and `after` all finished executing without throwing any errors). 
 
 #### What's the order of execution of sync and async reducers?
 
@@ -399,13 +453,29 @@ await dispatchFuture(MyAsyncAction1());
 await dispatchFuture(MyAsyncAction2());
 ```
 
+<br>
+
 ## Connector
 
-As usual, in Redux you generally have two widgets, one called the "dumb-widget", which knows nothing
-about Redux and the store, and another one to "wire" the store with that dumb-widget.
-Vanilla Redux calls these wiring widgets "containers", but we consider this bad since Flutter's most common widget is already called a `Container`.
-So we call them "connectors", and they do their magic by using a `StoreConnector`
-and a `ViewModel`.
+In Redux, you generally have two widgets, one called the "dumb-widget", 
+which knows nothing about Redux and the store, 
+and another one to "wire" the store with that dumb-widget.
+
+While Vanilla Redux traditionally calls these wiring widgets "containers", 
+Flutter's most common widget is already called a `Container`, which can be confusing.
+So I prefer calling them "connectors". 
+
+They do their magic by using a `StoreConnector` and a `ViewModel`.
+
+A view-model is a helper object to a `StoreConnector` widget. It holds the
+part of the Store state the corresponding dumb-widget needs, and may also
+convert this state part into a more convenient format for the dumb-widget
+to work with.
+
+In more detail: Each time some action reducer changes the store state,
+all `StoreConnector`s in the screen will use that state to create a new view-model, 
+and then compare it with the previous view-model created with the previous state.
+Only if the view-model changed, the connector rebuilds.
 
 For example:
 
@@ -414,51 +484,42 @@ class MyHomePageConnector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
 	return StoreConnector<AppState, ViewModel>(
-	  model: ViewModel(),
+	  vm: Factory(this),
 	  builder: (BuildContext context, ViewModel vm) => MyHomePage(
 		counter: vm.counter,
 		description: vm.description,
 		onIncrement: vm.onIncrement,
 	  ));
-  }
+  }}
+
+class Factory extends VmFactory<AppState, MyHomePageConnector> {
+  Factory(widget) : super(widget);
+  @override
+  ViewModel fromStore() => ViewModel(
+      counter: state.counter,
+      description: state.description,
+      onIncrement: () => dispatch(IncrementAndGetDescriptionAction()),
+      );
 }
 
-// Helper class to the connector widget. Holds the part of the State the widget needs,
-// and may perform conversions to the type of data the widget can conveniently work with.
-class ViewModel extends BaseModel<AppState> {
-  ViewModel();
-
-  int counter;
-  String description;
-  VoidCallback onIncrement;
-
-  ViewModel.build({
-	@required this.counter,
-	@required this.description,
-	@required this.onIncrement,
+class ViewModel extends Vm {  
+  final int counter;
+  final String description;
+  final VoidCallback onIncrement;
+  ViewModel({
+       @required this.counter,
+       @required this.description,
+       @required this.onIncrement,
   }) : super(equals: [counter, description]);
-
-  @override
-  ViewModel fromStore() => ViewModel.build(
-		counter: state.counter,
-		description: state.description,
-		onIncrement: () => dispatch(IncrementAndGetDescriptionAction()),
-	  );
 }
 ```
 
-The `StoreConnector` has a `distinct` parameter.
-As a performance optimization, `distinct:true` allows the widget to be rebuilt only when the
-ViewModel changes. If this is not done, then the widget will be rebuilt every time any state
-in the store is changed.
+For the view-model comparison to work, your ViewModel class must implement equals/hashcode.
+Otherwise, the `StoreConnector` will think the view-model changes everytime,
+and thus will rebuild everytime. This won't create any visible problems
+to your app, but is inefficient and may be slow.
 
-This `distinct` parameter is `true` by default, but this can be changed when creating the store,
-by passing it `defaultDistinct:false`.
-
-If `distinct` is `true`, you must implement equals and hashcode for the `ViewModel`,
-otherwise there is no way to know if the ViewModel changed.
-
-This can be done in three ways:
+The equals/hashcode can be done in three ways:
 
 * By typing `ALT`+`INSERT` in IntelliJ IDEA and choosing `==() and hashcode`.
 You can't forget to update this whenever new parameters are added to the model.
@@ -466,135 +527,207 @@ You can't forget to update this whenever new parameters are added to the model.
 * You can use the <a href="https://pub.dev/packages/built_value">built_value</a> package
 to ensure they are kept correct, without you having to update them manually.
 
-* Just add all the fields you want to the `equals` parameter to the `ViewModel`'s `build` constructor.
+* Just add all the fields you want (which are not callbacks) to the `equals` parameter 
+to the `ViewModel`'s `build` constructor.
 This will allow the ViewModel to automatically create its own `operator ==` and `hashcode` implicitly.
 For example:
 
 ```dart
-ViewModel.build({
+ViewModel({
 	  @required this.field1,
 	  @required this.field2,
 }) : super(equals: [field1, field2]);
 ```      
 
+<br>
+
 ### How to provide the ViewModel to the StoreConnector
 
 The `StoreConnector` actually accepts two parameters for the `ViewModel`, 
-of which one but **only one** should be provided in the `StoreConnector` constructor: 
-`model` or `converter`. 
+of which **only one** should be provided in the `StoreConnector` constructor: 
+`vm` or `converter`. 
 
-1. the `model` parameter 
+1. the `vm` parameter 
 
-   It expects a `ViewModel` that extends `BaseModel`.
-   This allows your model class to use the `equals` parameter, as already explained above, 
-   so that you don't need to implement `operator ==` and `hashcode` by hand.
+   The `vm` parameter expects a `Factory` object that extends `ViewModelFactory`.
+   This class should implement a method `fromStore` that returns a `ViewModel` that extends `Vm`:
+   
+   ```dart
+   @override
+     Widget build(BuildContext context) {
+       return StoreConnector<int, ViewModel>(
+         vm: Factory(),
+         builder: (BuildContext context, ViewModel vm) => MyWidget(...),
+       );
+     }
+   ```   
     
-   Also, AsyncRedux will automatically inject `state` and `dispatch` into your model instance, 
+   AsyncRedux will automatically inject `state` and `dispatch` into your model instance, 
    so that boilerplate is reduced in your `fromStore` method. For example:
    
-```dart
-class ViewModel extends BaseModel<AppState> {
-   ViewModel();
- 
-   String name;
-   VoidCallback onSave;
-
-   ViewModel.build({
-     @required this.name,
-     @required this.onSave,
-   }) : super(equals: [name]);
-
-   @override
-   ViewModel fromStore() => ViewModel.build(
-       name: state.user.name,
-       onSave: () => dispatch(SaveUserAction()),
-   );
-}
-```
+   ```dart
+   class Factory extends VmFactory<AppState, MyHomePageConnector> {           
+        @override
+        ViewModel fromStore() => ViewModel(
+            counter: state.counter,
+            description: state.description,
+            onIncrement: () => dispatch(IncrementAndGetDescriptionAction()),
+            );
+   }
+   ```      
+   
+   **Note:** If you need it, you may pass the connector widget to the factory's constructor, like this:
+   
+   ```dart    
+   vm: Factory(this),
+   
+   ...
+   
+   class Factory extends VmFactory<AppState, MyHomePageConnector> {
+      Factory(widget) : super(widget);
+   
+      @override
+         ViewModel fromStore() => ViewModel(
+             name: state.names[widget.user],             
+             );
+      }
+   ```
        
-   With this architecture you may also create separate methods for helping construct your model, 
+   The `vm` parameter's architecture lets you create separate methods for helping construct your model, 
    without having to pass the `store` around. For example:
 
-```dart
-@override
-ViewModel fromStore() => ViewModel.build(
-    name: _name(),
-    onSave: _onSave,
-);
-
-String _name() => state.user.name;
-
-VoidCallback _onSave: () => dispatch(SaveUserAction()),
-```
-       
-   Another idea is to subclass `BaseModel` to provide additional features to your model.
+   ```dart
+   @override
+   ViewModel fromStore() => ViewModel(
+       name: _name(),
+       onSave: _onSave,
+   );
+    
+   String _name() => state.user.name;
+    
+   VoidCallback _onSave: () => dispatch(SaveUserAction()),
+   ```
+           
+   Another idea is to subclass `Vm` to provide additional features to your model.
    For example, you could add extra getters to help you access state:
-
-```dart
-User user => state.user;
-
-@override
-ViewModel fromStore() => ViewModel.build(
-   name: user.name,
-   ...
-);
-```
+    
+    ```dart       
+    class BaseViewModel extends Vm {
+       User user => state.user;        
+    }
+    
+   class ViewModel extends BaseViewModel { 
+       @override
+       ViewModel fromStore() => ViewModel.build(
+          name: user.name,       
+       );                                    
+   }
+    ```
         
    Most examples in the [example tab](https://pub.dartlang.org/packages/async_redux#-example-tab-) 
-   use the `model` parameter.
+   use the `vm` parameter.
+  
 
 2. The `converter` parameter 
 
-   This is the good old one from `flutter_redux`. 
+   If you are migrating from `flutter_redux` to `async_redux`, 
+   you can keep using `flutter_redux`'s good old `converter` parameter:
+   
+   ```dart
+   @override
+     Widget build(BuildContext context) {
+       return StoreConnector<int, ViewModel>(
+         converter: (store) => ViewModel.fromStore(store),
+         builder: (BuildContext context, ViewModel vm) => MyWidget(...),
+       );
+     }
+   ```
+      
    It expects a static factory function that gets a `store` and returns the `ViewModel`.
-   You probably should use this one if you are migrating from `flutter_redux`.
+   
 
-```dart
-class ViewModel {
-   String name;
-   VoidCallback onSave;
+    ```dart
+    class ViewModel {
+       final String name;
+       final VoidCallback onSave;
+    
+       ViewModel({
+          @required this.name,
+          @required this.onSave,
+       });
+    
+       static ViewModel fromStore(Store<AppState> store) {
+          return ViewModel(
+             name: store.state,
+             onSave: () => store.dispatch(IncrementAction(amount: 1)),
+          );
+       }
+    
+       @override
+       bool operator ==(Object other) =>
+           identical(this, other) ||
+           other is ViewModel && runtimeType == other.runtimeType && name == other.name;
+    
+       @override
+       int get hashCode => name.hashCode;
+    }
+    ```                     
+   
+   However, the `converter` parameter can also make use of the `Vm` class 
+   to avoid having to create `operator ==` and `hashcode` manually: 
 
-   ViewModel({
-      @required this.name,
-      @required this.onSave,
-   });
+    ```dart
+    class ViewModel extends Vm {
+       final String name;
+       final VoidCallback onSave;
+    
+       ViewModel({
+          @required this.name,
+          @required this.onSave,
+       }) : super(equals: [name]);
+    
+       static ViewModel fromStore(Store<AppState> store) {
+          return ViewModel(
+             name: store.state,
+             onSave: () => store.dispatch(IncrementAction(amount: 1)),
+          );
+       }    
+    }
+    ```                     
 
-   static ViewModel fromStore(Store<AppState> store) {
-      return ViewModel(
-         name: store.state,
-         onSave: () => store.dispatch(IncrementAction(amount: 1)),
-      );
-   }
+   When using the `converter` parameter, 
+   it's a bit more difficult to create separate methods for helping construct your view-model: 
 
-   @override
-   bool operator ==(Object other) =>
-       identical(this, other) ||
-       other is ViewModel && runtimeType == other.runtimeType && name == other.name;
-
-   @override
-   int get hashCode => name.hashCode;
-}
-```
-
-   With this architecture it's a bit more difficult to create separate methods for helping construct your model: 
-
-```dart
-static ViewModel fromStore(Store<AppState> store) {
-   return ViewModel(
-      name: _name(store),
-      onSave: _onSave(store),
-   );
-}
-
-static String _name(Store<AppState>) => store.state.user.name;
-
-static VoidCallback _onSave(Store<AppState>) { 
-   return () => store.dispatch(SaveUserAction());
-} 
-```
+    ```dart
+    static ViewModel fromStore(Store<AppState> store) {
+       return ViewModel(
+          name: _name(store),
+          onSave: _onSave(store),
+       );
+    }
+    
+    static String _name(Store<AppState>) => store.state.user.name;
+    
+    static VoidCallback _onSave(Store<AppState>) { 
+       return () => store.dispatch(SaveUserAction());
+    } 
+    ```
       
    To see the `converter` parameter in action, please run 
    <a href="https://github.com/marcglasberg/async_redux/blob/master/example/lib/main_static_view_model.dart">this example</a>.    
+
+
+#### Will a state change always trigger the StoreConnectors?
+
+Usually yes, but if you want you can order some action not to trigger the `StoreConnector`,
+by providing a `notify: false` when dispatching:
+
+```dart
+dispatch(MyAction1(), notify: false); 
+dispatchFuture(MyAction2(), notify: false);
+```
+
+<br>
 
 ## Alternatives to the Connector
 
@@ -616,6 +749,8 @@ StoreProvider.dispatchFuture<AppState>(context, MyAction());
 AppState state = StoreProvider.state<AppState>(context); 
 ```          
 
+<br>
+
 ### Provider
 
 Another good alternative to the `StoreConnector` is using the <a href="https://pub.dev/packages/provider">Provider</a> 
@@ -632,6 +767,7 @@ and want to access the store directly from inside a single widget.
 Please visit the <a href="https://pub.dev/packages/provider_for_redux">provider_for_redux</a> package for
 in-depth explanation and examples on how to use AsyncRedux and Provider together.
 
+<br>
 
 ## Processing errors thrown by Actions
 
@@ -671,17 +807,22 @@ For example:
 ```dart
 var store = Store<AppState>(
   initialState: AppState.initialState(),
-  errorObserver: errorObserver,
+  errorObserver: MyErrorObserver<AppState>(),
 );
 
-bool errorObserver(Object error, ReduxAction action, Store store, Object state, int dispatchCount) {
-  print("Error thrown during $action: $error");
-  return true;
-}
+class MyErrorObserver<St> implements ErrorObserver<St> {
+  @override
+  bool observe(Object error, StackTrace stackTrace, ReduxAction<St> action, Store store) {
+    print("Error thrown during $action: $error");
+    return true;
+  }
+}                                                                                               
 ```
 
 If your error observer returns `true`, the error will be rethrown after the `errorObserver` finishes.
 If it returns `false`, the error is considered dealt with, and will be "swallowed" (not rethrown).
+
+<br>
 
 ### Giving better error messages 
 
@@ -707,6 +848,8 @@ class LogoutAction extends ReduxAction<AppState> {
 Note the `LogoutError` above gets the original error as cause, so no information is lost.
 
 In other words, the `wrapError(error)` method acts as the "catch" statement of the action.
+ 
+<br>
  
 ### User exceptions
 
@@ -770,7 +913,7 @@ class SaveUserAction extends ReduxAction<AppState> {
 
 The special `UserException` error class represents "user errors" which are meant as warnings to the user,
 and not as code errors to be logged.
-By default (if you don't define your own `errorObserver`) only errors which are not `UserException` are thrown.
+By default (if you don't define your own `errorObserver`), only errors which are not `UserException` are thrown.
 And if you do define an `errorObserver`, you'd probably want to replicate this behavior.
 
 In any case, `UserException`s are put into a special error queue,
@@ -779,7 +922,8 @@ You may use `UserException` as is, or subclass it, returning title and message f
 
 As explained in the beginning of this section,
 if you use the build-in error handling you must wrap your home-page with `UserExceptionDialog`.
-There, you may pass the `onShowUserExceptionDialog` parameter to change the default dialog, show a toast, or some other suitable widget:
+There, you may pass the `onShowUserExceptionDialog` parameter to change the default dialog, 
+show a toast, or some other suitable widget:
 
 ```dart
 UserExceptionDialog<AppState>(
@@ -787,7 +931,20 @@ UserExceptionDialog<AppState>(
 	  onShowUserExceptionDialog:
 		  (BuildContext context, UserException userException) => showDialog(...),
 );
-```                                             
+``` 
+
+> Note: The `UserExceptionDialog` can display any error widget you want in front of all the others on the screen.
+If this is not what you want, 
+you can easily create your own `MyUserExceptionWidget` to intercept the errors and do whatever you want. 
+Start by copying `user_exception_dialog.dart` 
+(which contains `UserExceptionDialog` and its `_ViewModel`) into another file,
+and search for the `didUpdateWidget` method. 
+This method will be called each time an error is available, 
+and there you can record this information in the widget's own state. 
+You can then change the screen in any way you want, according to that saved state, 
+in this widget's `build` method.  
+
+<br>
 
 ### Converting third-party errors into UserExceptions
 
@@ -825,7 +982,7 @@ var store = Store<AppState>(
 
 class MyWrapError extends WrapError {
   @override
-  UserException wrap(Object error) {
+  UserException wrap(Object error, StackTrace stackTrace, ReduxAction<St> action) {
     if ((error is PlatformException) && (error.code == "Error performing get") &&
           (error.message == "Failed to get document because the client is offline.")) 
         return UserException("Check your internet connection.", cause: error);
@@ -841,6 +998,7 @@ Otherwise, it just returns `null`, so that the original exception will not be mo
 
 Note this wrapper is called **after** `ReduxAction.wrapError`, and **before** the `ErrorObserver`.
          
+<br>
 
 ### UserExceptionAction 
 
@@ -856,6 +1014,7 @@ The `UserExceptionAction` is also useful even inside of actions,
 when you want to display an error dialog to the user 
 but you don't want to interrupt the action by throwing an exception.
 
+<br>
 
 ## Testing
 
@@ -991,6 +1150,12 @@ Let's see all the available methods of the `StoreTester`:
     action's `wrapError()` method. 
     Returns the info after the condition is met.
 
+11. `Future<TestInfo<St>> dispatchState(St state)`
+
+    Dispatches an action that changes the current state to the one provided by you.
+    Then, runs until that action is dispatched and finished (ignoring other actions).
+    Returns the info after the action finishes, containing the given state.  
+
 Some of the methods above return a list of type `TestInfoList`, which contains the step
 by step information of all the actions. You can then query for the actions you want to inspect.
 For example, suppose an action named `IncrementAndGetDescriptionAction` calls another 3 actions.
@@ -1063,6 +1228,141 @@ await storeTester.wait(SaveNameAction);
 expect(storeTester.lastInfo.state.name, "Mark");
 ```       
 
+<br>
+
+### Mocking actions and reducers
+
+To mock an action and its reducer, create a `MockStore` instead of a regular `Store`.
+
+The `MockStore` has a `mocks` parameter 
+which is a map where the keys are action types, and the values are the mocks.
+For example:   
+
+```dart
+var store = MockStore<AppState>(
+  initialState: initialState,  
+  mocks: {
+     MyAction1 : ...
+     MyAction2 : ...
+     ...
+  },
+);
+```       
+
+There are 5 different ways to define mocks:
+
+1. Use `null` to disable dispatching the action of a certain type:
+
+    ```dart
+    mocks: {
+       MyAction : null
+    }
+    ```       
+
+2. Use a `MockAction<St>` instance to dispatch this mock action instead,
+  and provide the **original action** as a getter to the mock action.
+
+    ```dart                        
+    class MyAction extends ReduxAction<AppState> {
+      String url;
+      MyAction(this.url);
+      Future<AppState> reduce() => get(url);
+    }      
+
+    class MyMockAction extends MockAction<AppState> {  
+      Future<AppState> reduce() async {                  
+        String url = (action as MyAction).url;
+        if (url == 'http://example.com') return 123;
+        else if (url == 'http://flutter.io') return 345;
+        else return 678;
+      }
+    }
+    ```
+      
+    ```dart    
+    mocks: {
+       MyAction : MyMockAction()
+    }
+    ```       
+
+3. Use a `ReduxAction<St>` instance to dispatch this mock action instead.
+
+    ```dart                        
+    class MyAction extends ReduxAction<AppState> {
+      String url;            
+      MyAction(this.url);
+      Future<AppState> reduce() => get(url);
+    }
+    
+    class MyMockAction extends ReduxAction<AppState> {  
+      Future<AppState> reduce() async => 123;
+    }
+    ```
+      
+    ```dart    
+    mocks: {
+       MyAction : MyMockAction()
+    }
+    ```       
+  
+4. Use a `ReduxAction<St> Function(ReduxAction<St>)` to create a mock from the original action.
+
+    ```dart                        
+    class MyAction extends ReduxAction<AppState> {
+      String url;        
+      MyAction(this.url);
+      Future<AppState> reduce() => get(url);
+    }
+    
+    class MyMockAction extends MockAction<AppState> {
+      String url;
+      MyMockAction(this.url);  
+      Future<AppState> reduce() async {                     
+        if (url == 'http://example.com') return 123;
+        else if (url == 'http://flutter.io') return 345;
+        else return 678;
+      }
+    }
+    ```
+      
+    ```dart   
+    mocks: {
+       MyAction : (MyAction action) => MyMockAction(action.url)
+    }
+    ```       
+
+5. Use a `St Function(ReduxAction<St>, St)` 
+or `Future<St> Function(ReduxAction<St>, St)` 
+to modify the state directly.
+
+    ```dart                        
+    class MyAction extends ReduxAction<AppState> {
+      String url;        
+      MyAction(this.url);
+      Future<AppState> reduce() => get(url);
+    }
+    ```
+      
+    ```dart   
+    mocks: {
+       MyAction : (MyAction action, AppState state) async {
+          if (action.url == 'http://example.com') return 123;
+          else if (action.url == 'http://flutter.io') return 345;
+          else return 678;
+       }
+    }
+    ```       
+
+You can also change the mocks after a store is created, 
+by using the following methods of the `MockStore` and `StoreTester` classes:
+
+```dart
+MockStore<St> addMock(Type actionType, dynamic mock);
+MockStore<St> addMocks(Map<Type, dynamic> mocks);
+MockStore<St> clearMocks();
+```
+ 
+<br>
 
 ### Testing UserExceptions
 
@@ -1114,6 +1414,8 @@ TestInfo info = await storeTester.waitAllGetLast([MyAction]);
 expect(info.errors.removeFirst().msg, "You can't do this.");
 ```
   
+<br>
+
 ### Test files
 
 If you want your tests to be comprehensive
@@ -1156,6 +1458,8 @@ The three corresponding test files could be named `my_widget_STATE_test.dart`,
 `my_widget_CONNECTOR_test.dart` and `my_widget_PRESENTATION_test.dart`.
 If you don't like this convention use your own, but just choose one early and stick to it.
 
+<br>
+
 ## Route Navigation
 
 AsyncRedux comes with a `NavigateAction` which you can dispatch to navigate your Flutter app.
@@ -1186,25 +1490,38 @@ return StoreProvider<AppState>(
 
 Then, use the action as needed:
 
-```dart
-dispatch(NavigateAction.pop());
+```dart                
+// Most Navigator methods are available. 
+// For example pushNamed: 
 dispatch(NavigateAction.pushNamed("myRoute"));
-dispatch(NavigateAction.pushReplacementNamed("myRoute"));
-dispatch(NavigateAction.pushNamedAndRemoveAll("myRoute"));
-dispatch(NavigateAction.pushNamedAndRemoveUntil("myRoute", predicate: (Route<dynamic> route) => route.settings.name == "anotherRoute"));
-dispatch(NavigateAction.popUntil("myRoute"));
-dispatch(NavigateAction.push(route));
 ```
 
-Note: Don't ever save the current route in the store. This will create all sorts of problems.
+Note: Don't ever save the current route in the store. 
+This will create all sorts of problems.
 If you need to know the route you're in, 
 you may use this static method provided by `NavigateAction`:
 
 ```dart
 String routeName = NavigateAction.getCurrentNavigatorRouteName(context);
-```
+```     
 
 Try running the: <a href="https://github.com/marcglasberg/async_redux/blob/master/example/lib/main_navigate.dart">Navigate Example</a>.
+
+### Testing with `NavigateAction`
+
+You can test navigation by asserting navigation types, route names etc.
+This is useful for verifying app flow in unit tests, instead of widget or driver tests. 
+ 
+For example:
+
+```dart         
+var navigateAction = actions.get(NavigateAction).action as NavigateAction;
+expect(navigateAction.type, NavigateType.pushNamed);
+expect((navigateAction.details as NavigatorDetails_PushNamed).routeName, "myRoute");
+```
+
+
+<br>
 
 ## Events
 
@@ -1342,6 +1659,8 @@ void consumeEvents() {
 
 Try running the: <a href="https://github.com/marcglasberg/async_redux/blob/master/example/lib/main_event_redux.dart">Event Example</a>.
 
+<br>
+
 ### Can I put mutable events into the store state?
 
 Events are mutable, and store state is supposed to be immutable.
@@ -1353,6 +1672,8 @@ happen when they are used as prescribed.
 You can think of events as piggybacking in the Redux infrastructure,
 and not belonging to the store state.
 You should just remember **not to persist them** when you persist the store state.
+
+<br>
 
 ### When should I use events?
  
@@ -1366,37 +1687,53 @@ However, we can also give these guidelines:
 3. You may use events to make one-off changes in controllers.
 4. You may use events to make one-off changes in other implicit state like the open state of dialogs or the keyboard.
 
+<br>
+
 ### Advanced event features
 
-There are some advanced event features you probably won't need, but you should know they exist:
+There are some advanced event features you may not need, but you should know they exist:
 
 1. Methods `isSpent`, `isNotSpent` and `state`
 
 	Methods `isSpent` and `isNotSpent` tell you if an event is spent or not, without consuming the event.
 	Method `state` returns the event payload, without consuming the event.
 
-2. Method `Event.from(Event<T> evt1, Event<T> evt2)`
+2. Constructor `Event.map(Event<dynamic> evt, T Function(dynamic) mapFunction)`
+
+   This is a convenience factory to create an event which is transformed by
+   some function that, usually, needs the store state. You must provide the
+   event and a map-function. The map-function must be able to deal with
+   the spent state (`null` or `false`, accordingly).
+
+   For example, if `state.indexEvt = Event<int>(5)` and you must get a user from it:
+
+   ```dart
+   var mapFunction = (index) => index == null ? null : state.users[index];
+   Event<User> userEvt = MappedEvent<int, User>(state.indexEvt, mapFunction);
+   ```  
+
+3. Constructor `Event.from(Event<T> evt1, Event<T> evt2)`
 
 	This is a convenience factory method to create `EventMultiple`,
 	a special type of event which consumes from more than one event.
 	If the first event is not spent, it will be consumed, and the second will not.
 	If the first event is spent, the second one will be consumed.
 	So, if both events are NOT spent, the method will have to be called twice to consume both.
-	If both are spent, returns null.
+	If both are spent, returns `null`.
 
-3. Method `static T consumeFrom<T>(Event<T> evt1, Event<T> evt2)`
+4. Method `static T consumeFrom<T>(Event<T> evt1, Event<T> evt2)`
 
 	This is a convenience static method to consume from more than one event.
 	If the first event is not spent, it will be consumed, and the second will not.
 	If the first event is spent, the second one will be consumed.
 	So, if both events are NOT spent, the method will have to be called twice to consume both.
-	If both are spent, returns null. For example:
+	If both are spent, returns `null`. For example:
 
-```dart
-String getMessageEvt() {
-   return Event.consumeFrom(firstMsgEvt, secondMsgEvt);
- }
-```
+    ```dart
+    String getMessageEvt() => Event.consumeFrom(firstMsgEvt, secondMsgEvt);
+    ```
+
+<br>
 
 ## Progress indicators
 
@@ -1532,6 +1869,7 @@ you can do so by injecting your custom reducer into `WaitAction.reducer`
 during your app's initialization.
 Refer to the `WaitAction` <a href="https://github.com/marcglasberg/async_redux/blob/master/lib/src/wait_action.dart">documentation</a> for more information.   
 
+<br>
 
 ## Waiting until an Action is finished
 
@@ -1553,6 +1891,7 @@ return RefreshIndicator(
 
 Try running the: <a href="https://github.com/marcglasberg/async_redux/blob/master/example/lib/main_dispatch_future.dart">Dispatch Future Example</a>.
 
+<br>
 
 ## Waiting until the state meets a certain condition
 
@@ -1595,6 +1934,7 @@ To that end, the action dispatches an action to create the calendar if necessary
 and then use the `store.waitCondition()` method to wait until a calendar is present in the state. 
 Only then it will add the appointment to the calendar. 
 
+<br>
 
 ## State Declaration
 
@@ -1674,6 +2014,8 @@ class TodoState {
 }
 ```
     
+<br>
+    
 ### Selectors
 
 Your connector-widgets usually have a view-model that goes into the store and selects the part of the store
@@ -1684,7 +2026,125 @@ For example, the `TodoState` class above could contain a selector to filter out 
 ```dart
 static List<Todo> selectTodosForUser(AppState state, User user)
    => state.todoState.todos.where((todo) => (todo.user == user)).toList();
-```
+```       
+
+<br>
+
+### Cache (Reselectors)
+
+Suppose you use a `ListView.builder` to display user names as list items. 
+In your `StoreConnector`, you could create a `ViewModel` that, given the item index, returns a user name:
+
+```dart
+state.users[index].name;
+```       
+
+But now suppose you want to display only the users with names that start with the letter `A`. 
+You could filter the user list to remove all other names, like this:
+
+```dart
+state.users.where((user)=>user.name.startsWith("A")).toList()[index].name;
+```                                                                                           
+
+This works, but will filter the list repeatedly, once for each index.
+This is not a problem for small lists, but will become slow if the list contains thousands of users.
+
+The solution to this problem is caching the filtered list. 
+To that end, you can use the "reselect" functionality provided by AsyncRedux.
+
+First, create a selector that returns the information you need: 
+
+```dart
+static List<User> selectUsersWithNamesStartingWith(AppState state, {String text})
+   => state.users.where((user)=>user.name.startsWith(text)).toList();
+```    
+
+And then use it in the ViewModel:
+
+```dart
+selectUsersWithNamesStartingWith(state, text: "A")[index].name;
+```                                                                                           
+
+Next, we have to modify the selector so that it caches the filtered list.
+AsyncRedux provides a few global functions which you can use, depending on the 
+number of states, and the number of parameters your selector needs.
+
+In this example, we have a single state and a single parameter, 
+so we're going to use the `cache1_1` method:
+
+```dart                                                    
+static List<User> selectUsersWithNamesStartingWith(AppState state, {String text})
+   => _selectUsersWithNamesStartingWith(state)(text);
+
+static final _selectUsersWithNamesStartingWith = cache1_1(
+        (AppState state) 
+           => (String text) 
+              => state.users.where((user)=>user.name.startsWith(text)).toList());
+```  
+
+The above code will calculate the filtered list only once, 
+and then return it when the selector is called again with the same `state` and `text` parameters.
+
+If the `state` changes, or the `text` changes (or both), it will recalculate and then cache again the new result.
+
+We can further improve this by noting that we only need to recalculate the result when `state.users` changes.
+Since `state.users` is a subset of `state`, it will change less often. So a better selector would be this:
+
+```dart
+static List<User> selectUsersWithNamesStartingWith(AppState state, {String text})
+   => _selectUsersWithNamesStartingWith(state.users)(text);
+ 
+static final _selectUsersWithNamesStartingWith = cache1_1(
+        (List<User> users) 
+           => (String text) 
+              => users.where((user)=>user.name.startsWith(text)).toList());
+```  
+    
+#### Cache syntax
+
+For the moment, AsyncRedux provides these six methods that combine 1 or 2 states with 0, 1 or 2 parameters:
+
+```dart
+cache1((state) => () => ...);
+cache1_1((state) => (parameter) => ...);
+cache1_2((state) => (parameter1, parameter2) => ...);
+
+cache2((state1, state2) => () => ...);
+cache2_1((state1, state2) => (parameter) => ...);
+cache2_2((state1, state2) => (parameter1, parameter2) => ...);
+```    
+
+I have created only those above, because for my own usage I never required more than that. 
+Please, open an <a href="https://github.com/marcglasberg/async_redux/issues">issue</a> 
+to ask for more variations in case you feel the need.
+
+This syntax treats the states and the parameters differently. 
+If you call some selector while keeping the **same state** and changing only the parameter, 
+the selector will cache all the results, one for each parameter.
+
+However, as soon as you call the selector with a **changed state**, 
+it will delete all of its previous cached information,
+since it understands that they are no longer useful.
+And even if you don't call that selector ever again, it will delete the cached information if it detects
+that the state is no longer used in other parts of the program.
+In other words, AsyncRedux keeps the cached information in <a href="https://pub.dev/packages/weak_map">weak-map</a>, 
+so that the cache will not hold to old information and have a negative impact in memory usage.  
+
+#### The reselect package
+
+The reselect functionality explained above is provided out-of-the-box with AsyncRedux.
+However, AsyncRedux also works perfectly with the external <a href="https://pub.dev/packages/reselect">reselect</a> package.
+
+Then, why did I care to reimplement a similar functionality? What are the differences?
+ 
+First, the AsyncRedux caches can keep any number of cached results for each selector,
+one for each time the selector is called with the same states and different parameters.
+Meanwhile, the reselect package keeps a single cached result per selector.
+
+And second, the AsyncRedux reselector discards the cached information when the state changes or is no longer used.
+Meanwhile, the reselect package will always keep the states and cached results in memory.
+
+<br>
 
 ## Action Subclassing
 
@@ -1698,7 +2158,7 @@ class AddTodoAction extends ReduxAction<AppState> {
   @override
   AppState reduce() {
 	if (todo == null) return null;
-	else return state.copy(todoState: List.of(state.todoState.todos)..add(todo)));
+	else return state.copy(todoState: List.of(state.todoState.todos)..add(todo));
   }
 }
 
@@ -1746,15 +2206,16 @@ abstract class TodoAction extends BaseAction {
   TodoState reduceTodoState();
       
   @override
-  AppState reduce() {
-    TodoState todoState = reduceTodoState();  
-    return (todoState == null) ? null : state.copy(todoState: todoState);
+  Future<AppState> reduce() {
+    Future<TodoState> todoState = reduceTodoState();
+    if (todoState is Future) return todoState.then((_todoState) => state.copy(todoState: _todoState));   
+    else return (todoState == null) ? null : state.copy(todoState: todoState);
   }
 }
 ```
     
-If you declare those specialized abstract actions, you can have specialized reducers that only need to return 
-that part of the state that changed:
+If you declare those specialized abstract actions, 
+you can have specialized reducers that only need to return that part of the state that changed:
 
 ```dart
 class AddTodoAction extends TodoAction {
@@ -1768,6 +2229,8 @@ class AddTodoAction extends TodoAction {
   }
 }
 ```
+ 
+<br>
  
 ### Abstract Before and After
 
@@ -1799,6 +2262,8 @@ class ChangeTextAction extends BarrierAction {
 
 The above `BarrierAction` is demonstrated in <a href="https://github.com/marcglasberg/async_redux/blob/master/example/lib/main_event_redux.dart">this example</a>.
 
+<br>
+
 ## IDE Navigation
 
 How does AsyncRedux solve the IDE navigation problem?
@@ -1809,6 +2274,7 @@ During development, if you need to see what some action does, you just tell your
 If you need to list all of your actions,
 you just go to the `ReduxAction` class declaration and ask the IDE to list all of its subclasses.
 
+<br>
 
 ## Persistence
 
@@ -1882,13 +2348,23 @@ store.dispatch(PersistAction());
 
 Have a look at the: <a href="https://github.com/marcglasberg/async_redux/blob/master/test/persistence_test.dart">Persistence tests</a>.
 
+<br>
+
 ### Saving and Loading
 
 You can choose any way you want to save the state difference to the local disk,
 but one way is using the provided `LocalPersist` class,
 which is very easy to use.
+
+Note: At the moment it only works for Android/iOS, not for the web.
  
-First you need to convert yourself your objects to a list of **simple objects** 
+First, import it:
+
+```dart 
+import 'package:async_redux/local_persist.dart';
+```
+ 
+You need to convert yourself your objects to a list of **simple objects** 
 composed only of numbers, booleans, strings, lists and maps (you can nest lists and maps).    
 
 For example, this is a list of simple objects:
@@ -1938,6 +2414,7 @@ await persist.delete();
 
 Have a look at the: <a href="https://github.com/marcglasberg/async_redux/blob/master/test/local_persist_test.dart">Local Persist tests</a>.
  
+<br>
 
 ## Logging
 
@@ -2003,6 +2480,7 @@ Please note, unless the action reducer is synchronous,
 getting an END action observation doesn't mean that all of the action effects have finished, 
 because the action may have started async processes that may well last into the future. And these processes may later dispatch other actions that will change the store state. However, it does mean that the action can no longer change the state **directly**.
 
+<br>
 
 ## Observing rebuilds
 
@@ -2040,6 +2518,8 @@ The `ModelObserver` is also useful when you want to create tests
 to assert that rebuilds happen when and only when the appropriate parts of the state change.
 For an example, see the <a href="https://github.com/marcglasberg/async_redux/blob/master/test/model_observer_test.dart">Model Observer Test</a>.
 
+<br>
+
 ## How to interact with the database
 
 The following advice works for any Redux version, including AsyncRedux.
@@ -2066,6 +2546,8 @@ This rebuilds your widgets that depend on `something`, with its new value.
 The state now holds the new `something`,
 and the local store persistor may persist this value to the local file system, if that's what you want.
 
+<br>
+
 ## How to deal with Streams
 
 The following advice works for any Redux version, including AsyncRedux.
@@ -2080,6 +2562,8 @@ AsyncRedux plays well with Streams, as long as you know how to use them:
   They are not app state, and they should not be persisted to the local filesystem. 
   Instead, they are something that "generates state". 
   
+<br>
+
 ### So, how do you use streams? 
 
 Let's pretend you want to listen to changes to the user name, in a Firestore database.
@@ -2096,6 +2580,8 @@ and send down to the stateful dumb-widgets.
 
 - If the stream should run only when some actions demand it,
 their reducers may dispatch the actions to start and cancel as needed.
+
+<br>
 
 ### Where the stream subscriptions themselves are stored 
 
@@ -2121,6 +2607,8 @@ For example, `userNameStream` could be a static field of the `StartListenUserNam
 Or put them wherever you think makes sense.
 In all cases above, you can still inject them with mocks, for tests.
     
+<br>
+
 ### How do streams pass their information to the store and ultimately to the widgets?
   
 When you create the stream, define its callback so that it dispatches an appropriate action. 
@@ -2138,6 +2626,8 @@ streamSub = stream.listen((QuerySnapshot querySnapshot) {
   }, onError: ...);
 ```
 
+<br>
+
 ### To sum up:
 
 1. Put your stream subscriptions where they can be accessed by the reducers,
@@ -2148,6 +2638,8 @@ but NOT inside of the store state.
 3. Create actions to start and cancel streams, and call them when necessary.
 
 4. The stream callback should dispatch actions to put the snapshot data into the store state.
+
+<br>
 
 ## Recommended Directory Structure
 
@@ -2245,6 +2737,8 @@ Your final directory structure would then look something like this:
     └── pubspec.yaml
 ```
 
+<br>
+
 ## Where to put your business logic
 
 Widgets, Connectors and ViewModels are part of the client code. 
@@ -2263,6 +2757,8 @@ Rules of thumb:
 * Put your business logic in the Action reducers.
 * Put your business logic in the State classes.
  
+<br>
+
 ## Architectural discussion 
 
 Reading the following text is not important for the practical use of AsyncRedux,
@@ -2347,11 +2843,21 @@ Reducers as methods of action classes were shown to me by Scott Stoll and Simon 
 * <a href="https://pub.dev/packages/i18n_extension">i18n_extension</a>
 * <a href="https://pub.dev/packages/align_positioned">align_positioned</a>
 * <a href="https://pub.dev/packages/network_to_file_image">network_to_file_image</a>
+* <a href="https://pub.dev/packages/image_pixels">image_pixels</a>
 * <a href="https://pub.dev/packages/matrix4_transform">matrix4_transform</a> 
 * <a href="https://pub.dev/packages/back_button_interceptor">back_button_interceptor</a>
 * <a href="https://pub.dev/packages/indexed_list_view">indexed_list_view</a> 
 * <a href="https://pub.dev/packages/animated_size_and_fade">animated_size_and_fade</a>
 * <a href="https://pub.dev/packages/assorted_layout_widgets">assorted_layout_widgets</a>
+* <a href="https://pub.dev/packages/weak_map">weak_map</a>
+
+*My Medium Articles:*
+* <a href="https://medium.com/flutter-community/https-medium-com-marcglasberg-async-redux-33ac5e27d5f6">Async Redux: Flutter’s non-boilerplate version of Redux</a> (versions: <a href="https://medium.com/flutterando/async-redux-pt-brasil-e783ceb13c43">Português</a>)
+* <a href="https://medium.com/flutter-community/i18n-extension-flutter-b966f4c65df9">i18n_extension</a> (versions: <a href="https://medium.com/flutterando/qual-a-forma-f%C3%A1cil-de-traduzir-seu-app-flutter-para-outros-idiomas-ab5178cf0336">Português</a>)
+* <a href="https://medium.com/flutter-community/flutter-the-advanced-layout-rule-even-beginners-must-know-edc9516d1a2">Flutter: The Advanced Layout Rule Even Beginners Must Know</a> (versions: <a href="https://habr.com/ru/post/500210/">русский</a>)
+
+*My article in the official Flutter documentation*:
+* <a href="https://flutter.dev/docs/development/ui/layout/constraints">Understanding constraints</a>
 
 <br>_Marcelo Glasberg:_<br>
 _https://github.com/marcglasberg_<br>

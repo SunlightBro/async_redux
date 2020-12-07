@@ -14,22 +14,22 @@ class AppState {
 
 class Action1 extends ReduxAction<AppState> {
   @override
-  FutureOr<AppState> reduce() => AppState.add(state, "1");
+  AppState reduce() => AppState.add(state, "1");
 }
 
 class Action2 extends ReduxAction<AppState> {
   @override
-  FutureOr<AppState> reduce() => AppState.add(state, "2");
+  AppState reduce() => AppState.add(state, "2");
 }
 
 class Action3 extends ReduxAction<AppState> {
   @override
-  FutureOr<AppState> reduce() => AppState.add(state, "3");
+  AppState reduce() => AppState.add(state, "3");
 }
 
 class Action3b extends ReduxAction<AppState> {
   @override
-  FutureOr<AppState> reduce() {
+  AppState reduce() {
     dispatch(Action4());
     return AppState.add(state, "3b");
   }
@@ -37,17 +37,17 @@ class Action3b extends ReduxAction<AppState> {
 
 class Action4 extends ReduxAction<AppState> {
   @override
-  FutureOr<AppState> reduce() => AppState.add(state, "4");
+  AppState reduce() => AppState.add(state, "4");
 }
 
 class Action5 extends ReduxAction<AppState> {
   @override
-  FutureOr<AppState> reduce() => AppState.add(state, "5");
+  AppState reduce() => AppState.add(state, "5");
 }
 
 class Action6 extends ReduxAction<AppState> {
   @override
-  FutureOr<AppState> reduce() {
+  AppState reduce() {
     dispatch(Action1());
     dispatch(Action2());
     dispatch(Action3());
@@ -57,9 +57,9 @@ class Action6 extends ReduxAction<AppState> {
 
 class Action6b extends ReduxAction<AppState> {
   @override
-  FutureOr<AppState> reduce() async {
+  Future<AppState> reduce() async {
     dispatch(Action1());
-    await Future.delayed(Duration(milliseconds: 10));
+    await Future.delayed(const Duration(milliseconds: 10));
     dispatch(Action2());
     dispatch(Action3());
     return AppState.add(state, "6b");
@@ -68,7 +68,7 @@ class Action6b extends ReduxAction<AppState> {
 
 class Action6c extends ReduxAction<AppState> {
   @override
-  FutureOr<AppState> reduce() {
+  AppState reduce() {
     dispatch(Action1());
     dispatch(Action2());
     dispatch(Action3b());
@@ -78,7 +78,7 @@ class Action6c extends ReduxAction<AppState> {
 
 class Action7 extends ReduxAction<AppState> {
   @override
-  FutureOr<AppState> reduce() async {
+  Future<AppState> reduce() async {
     dispatch(Action4());
     dispatch(Action6());
     dispatch(Action2());
@@ -89,7 +89,7 @@ class Action7 extends ReduxAction<AppState> {
 
 class Action7b extends ReduxAction<AppState> {
   @override
-  FutureOr<AppState> reduce() async {
+  Future<AppState> reduce() async {
     dispatch(Action4());
     dispatch(Action6b());
     dispatch(Action2());
@@ -100,8 +100,8 @@ class Action7b extends ReduxAction<AppState> {
 
 class Action8 extends ReduxAction<AppState> {
   @override
-  FutureOr<AppState> reduce() async {
-    await Future.delayed(Duration(milliseconds: 50));
+  Future<AppState> reduce() async {
+    await Future.delayed(const Duration(milliseconds: 50));
     dispatch(Action2());
     return AppState.add(state, "8");
   }
@@ -109,27 +109,61 @@ class Action8 extends ReduxAction<AppState> {
 
 class Action9 extends ReduxAction<AppState> {
   @override
-  FutureOr<AppState> reduce() async {
-    await Future.delayed(Duration(milliseconds: 100));
+  Future<AppState> reduce() async {
+    await Future.delayed(const Duration(milliseconds: 100));
     return AppState.add(state, "9");
   }
 }
 
-class Action10 extends ReduxAction<AppState> {
+class Action10a extends ReduxAction<AppState> {
   @override
-  FutureOr<AppState> reduce() async {
+  Future<AppState> reduce() async {
     dispatch(Action1());
     dispatch(Action2());
-    dispatch(Action11());
+    dispatch(Action11a());
     dispatch(Action3());
     return AppState.add(state, "10");
   }
 }
 
-class Action11 extends ReduxAction<AppState> {
+class Action10b extends ReduxAction<AppState> {
   @override
-  FutureOr<AppState> reduce() async {
-    throw UserException("Hello!");
+  Future<AppState> reduce() async {
+    dispatch(Action1());
+    dispatch(Action2());
+    dispatch(Action11b());
+    dispatch(Action3());
+    return AppState.add(state, "10");
+  }
+}
+
+class Action11a extends ReduxAction<AppState> {
+  @override
+  AppState reduce() {
+    throw const UserException("Hello!");
+  }
+}
+
+class Action11b extends ReduxAction<AppState> {
+  @override
+  Future<AppState> reduce() async {
+    throw const UserException("Hello!");
+  }
+}
+
+class Action12 extends ReduxAction<AppState> {
+  @override
+  AppState reduce() {
+    dispatch(Action13());
+    return AppState.add(state, "12");
+  }
+}
+
+class Action13 extends ReduxAction<AppState> {
+  @override
+  Future<AppState> reduce() async {
+    await Future.delayed(const Duration(milliseconds: 1));
+    return AppState.add(state, "13");
   }
 }
 
@@ -138,6 +172,44 @@ void main() {
     var store = Store<AppState>(initialState: AppState("0"));
     return StoreTester.from(store);
   }
+
+  ///////////////////////////////////////////////////////////////////////////////
+
+  test('Dispatch multiple actions but only issue a single change event.', () async {
+    var storeTester = createStoreTester();
+    expect(storeTester.state.text, "0");
+
+    int invocations = 0;
+
+    storeTester.store.onChange.listen((event) {
+      invocations += 1;
+    });
+
+    await storeTester.dispatchFuture(Action1());
+    await storeTester.dispatchFuture(Action2());
+    await storeTester.dispatchFuture(Action3());
+    await storeTester.dispatchFuture(Action4());
+
+    expect(invocations, 4);
+    expect(storeTester.state.text, "0,1,2,3,4");
+
+    storeTester = createStoreTester();
+    expect(storeTester.state.text, "0");
+
+    invocations = 0;
+
+    storeTester.store.onChange.listen((event) {
+      invocations += 1;
+    });
+
+    await storeTester.dispatchFuture(Action1(), notify: false);
+    await storeTester.dispatchFuture(Action2(), notify: false);
+    await storeTester.dispatchFuture(Action3(), notify: false);
+    await storeTester.dispatchFuture(Action4(), notify: true);
+
+    expect(invocations, 1);
+    expect(storeTester.state.text, "0,1,2,3,4");
+  });
 
   ///////////////////////////////////////////////////////////////////////////////
 
@@ -163,7 +235,7 @@ void main() {
     expect(info2.ini, false);
   });
 
-  ///////////////////////////////////////////////////////////////////////////////
+  /////////////////////////////////////////////////////////////////////////////
 
   test(
       'Dispatch some actions and wait until some condition is met. '
@@ -282,15 +354,17 @@ void main() {
 
     await storeTester.wait(Action2).then((_) => throw AssertionError(),
         onError: expectAsync1((Object error) {
-      expect(error, TypeMatcher<StoreException>());
+      expect(error, const TypeMatcher<StoreException>());
       expect(
           error.toString(),
-          "Got this action: Action1 INI.\n"
-          "Was expecting: Action2 INI.");
+          'Got this unexpected action: Action1 INI.\n'
+          'Was expecting: Action2 INI.\n'
+          'obtainedIni: [Action1]\n'
+          'ignoredIni: []');
     }));
   });
 
-  ///////////////////////////////////////////////////////////////////////////////
+  /////////////////////////////////////////////////////////////////////////////
 
   test(
       'Dispatch a few actions and wait for all of them, in order. '
@@ -336,11 +410,13 @@ void main() {
 
     await storeTester.waitAllGetLast([Action1, Action2, Action3]).then(
         (_) => throw AssertionError(), onError: expectAsync1((Object error) {
-      expect(error, TypeMatcher<StoreException>());
+      expect(error, const TypeMatcher<StoreException>());
       expect(
           error.toString(),
-          "Got this action: Action3 INI.\n"
-          "Was expecting: Action2 INI.");
+          'Got this unexpected action: Action3 INI.\n'
+          'Was expecting: Action2 INI.\n'
+          'obtainedIni: [Action1, Action3]\n'
+          'ignoredIni: []');
     }));
   });
 
@@ -348,7 +424,7 @@ void main() {
 
   test(
       'Dispatch a few actions and wait for all of them, in order. '
-      'Gets an error because a different one was dispacthed in the middle.', () async {
+      'Gets an error because a different one was dispatched in the middle.', () async {
     var storeTester = createStoreTester();
 
     storeTester.dispatch(Action1());
@@ -358,11 +434,13 @@ void main() {
 
     await storeTester.waitAllGetLast([Action1, Action2, Action3]).then(
         (_) => throw AssertionError(), onError: expectAsync1((Object error) {
-      expect(error, TypeMatcher<StoreException>());
+      expect(error, const TypeMatcher<StoreException>());
       expect(
           error.toString(),
-          "Got this action: Action4 INI.\n"
-          "Was expecting: Action3 INI.");
+          'Got this unexpected action: Action4 INI.\n'
+          'Was expecting: Action3 INI.\n'
+          'obtainedIni: [Action1, Action2, Action4]\n'
+          'ignoredIni: []');
     }));
   });
 
@@ -399,7 +477,7 @@ void main() {
 
     await storeTester.waitUntil(Action3, timeoutInSeconds: 1).then((_) => throw AssertionError(),
         onError: expectAsync1((Object error) {
-      expect(error, TypeMatcher<StoreException>());
+      expect(error, const TypeMatcher<StoreException>());
       expect(error.toString(), "Timeout.");
     }));
   });
@@ -439,7 +517,7 @@ void main() {
     await storeTester
         .waitUntilAction(Action3(), timeoutInSeconds: 1)
         .then((_) => throw AssertionError(), onError: expectAsync1((Object error) {
-      expect(error, TypeMatcher<StoreException>());
+      expect(error, const TypeMatcher<StoreException>());
       expect(error.toString(), "Timeout.");
     }));
   });
@@ -475,7 +553,7 @@ void main() {
 
     await storeTester.waitAllUnorderedGetLast([Action1, Action2, Action3]).then(
         (_) => throw AssertionError(), onError: expectAsync1((Object error) {
-      expect(error, TypeMatcher<StoreException>());
+      expect(error, const TypeMatcher<StoreException>());
       expect(error.toString(), "Unexpected action was dispatched: Action4 INI.");
     }));
   });
@@ -693,6 +771,7 @@ void main() {
   });
 
   ///////////////////////////////////////////////////////////////////////////////
+
   test(
       'Dispatch a few actions and wait for all of them, in order. '
       'Ignore some actions, including one which we are also waiting for it. '
@@ -732,7 +811,7 @@ void main() {
     expect(infos.getIndex(3).state.text, "0,4,1,2,2,3,4,2,4,5");
   });
 
-  ///////////////////////////////////////////////////////////////////////////////
+  /////////////////////////////////////////////////////////////////////////////
 
   test(
       'Dispatch a few actions, some async that dispatch others, '
@@ -808,12 +887,12 @@ void main() {
     storeTester.dispatch(Action7b());
 
     TestInfoList<AppState> infos = await storeTester.waitAll(
-      [Action7b, Action4, Action6b, Action1, Action2, Action5, Action2, Action3],
+      [Action7b, Action4, Action6b, Action2, Action5, Action1, Action2, Action3],
     );
 
     // All actions affect the state, even the ones ignored by the store-tester.
     // However, ignored action can run any number of times.
-    expect(infos.last.state.text, "0,4,1,2,5,7b,2,3,6b");
+    expect(infos.last.state.text, "0,4,2,5,7b,2,3,6b");
     expect(infos.last.errors, isEmpty);
 
     // All 8 states were collected.
@@ -834,17 +913,17 @@ void main() {
     storeTester.dispatch(Action7b());
 
     TestInfoList<AppState> infos = await storeTester.waitAll(
-      [Action7b, Action4, Action6b, Action1, Action5, Action3],
+      [Action7b, Action4, Action6b, Action2, Action5, Action1, Action3],
       ignore: [Action2],
     );
 
     // All actions affect the state, even the ones ignored by the store-tester.
     // However, ignored action can run any number of times.
-    expect(infos.last.state.text, "0,4,1,2,5,7b,2,3,6b");
+    expect(infos.last.state.text, "0,4,2,5,7b,2,3,6b");
     expect(infos.last.errors, isEmpty);
 
-    // Only 6 states were collected. The ignored action doesn't generate info.
-    expect(infos.length, 6);
+    // Only 7 states were collected. The ignored action doesn't generate info.
+    expect(infos.length, 7);
   });
 
   ///////////////////////////////////////////////////////////////////////////////
@@ -910,6 +989,27 @@ void main() {
 
   ///////////////////////////////////////////////////////////////////////////////
 
+  // TODO: THIS ONE IS FAILING. FIX!!!
+  test("Wait for a sync action that dispatches an async action which is ignored.", () async {
+    var storeTester = createStoreTester();
+
+    storeTester.dispatch(Action12());
+    storeTester.dispatch(Action12());
+
+    var infos = await storeTester.waitAll(
+      [
+        Action12,
+        Action12,
+      ],
+      ignore: [Action13],
+    );
+
+    expect(infos.getIndex(0).state.text, "0,12");
+    expect(infos.getIndex(1).state.text, "0,12,12");
+  });
+
+  ///////////////////////////////////////////////////////////////////////////////
+
   test('Makes sure we wait until the END of all ignored actions.', () async {
     //
     var storeTester = createStoreTester();
@@ -937,6 +1037,7 @@ void main() {
     );
     expect(info.state.text, "0,1,2,3");
     expect(info.errors, isEmpty);
+
     storeTester.dispatch(Action6());
     info = await storeTester.waitAllGetLast([
       Action6,
@@ -976,7 +1077,7 @@ void main() {
     expect(info.state.text, "0,1,2,3,6,1,2,3,6");
   });
 
-  ///////////////////////////////////////////////////////////////////////////////
+  /////////////////////////////////////////////////////////////////////////////
 
   test('Makes sure we wait until the END of all ignored actions.', () async {
     //
@@ -1036,15 +1137,15 @@ void main() {
     var storeTester = createStoreTester();
 
     runZoned(() {
-      storeTester.dispatch(Action10());
+      storeTester.dispatch(Action10a());
     }, onError: (error, stackTrace) {
-      expect(error, UserException("Hello!"));
+      expect(error, const UserException("Hello!"));
     });
 
-    TestInfo<AppState> info = await storeTester.waitUntil(Action11);
-    expect(info.error, UserException("Hello!"));
+    TestInfo<AppState> info = await storeTester.waitUntil(Action11a);
+    expect(info.error, const UserException("Hello!"));
     expect(info.processedError, null);
-    expect(info.state.text, "0,1,2,3");
+    expect(info.state.text, "0,1,2");
     expect(info.ini, false);
   });
 
@@ -1052,12 +1153,34 @@ void main() {
 
   test(
       'An action dispatches other actions, and one of them throws an error. '
+      'Wait until that action finishes, '
+      'and check the error.', () async {
+    var storeTester = createStoreTester();
+
+    runZoned(() {
+      storeTester.dispatch(Action10b());
+    }, onError: (error, stackTrace) {
+      expect(error, const UserException("Hello!"));
+    });
+
+    TestInfo<AppState> info = await storeTester.waitUntil(Action11b);
+    expect(info.error, const UserException("Hello!"));
+    expect(info.processedError, null);
+    expect(info.state.text, "0,1,2,3,10");
+    expect(info.ini, false);
+  });
+
+  ///////////////////////////////////////////////////////////////////////////////
+
+  test(
+      'An action dispatches other actions, and one of them '
+      '(a sync one) throws an error. '
       'Wait until the error TYPE is thrown, '
       'and check the error.', () async {
     var storeTester = createStoreTester();
 
     runZoned(() {
-      storeTester.dispatch(Action10());
+      storeTester.dispatch(Action10a());
     }, onError: (error, stackTrace) {});
 
     TestInfo<AppState> info = await storeTester.waitUntilErrorGetLast(
@@ -1065,32 +1188,33 @@ void main() {
       timeoutInSeconds: 1,
     );
 
-    expect(info.error, UserException("Hello!"));
+    expect(info.error, const UserException("Hello!"));
     expect(info.processedError, null);
-    expect(info.state.text, "0,1,2,3");
+    expect(info.state.text, "0,1,2");
     expect(info.ini, false);
   });
 
   ///////////////////////////////////////////////////////////////////////////////
 
   test(
-      'An action dispatches other actions, and one of them throws an error. '
+      'An action dispatches other actions, and one of them '
+      '(an async one) throws an error. '
       'Wait until the error (compare using equals) is thrown, '
       'and check the error.', () async {
     var storeTester = createStoreTester();
 
     runZoned(() {
-      storeTester.dispatch(Action10());
+      storeTester.dispatch(Action10a());
     }, onError: (error, stackTrace) {});
 
     TestInfo<AppState> info = await storeTester.waitUntilErrorGetLast(
-      error: UserException("Hello!"),
+      error: const UserException("Hello!"),
       timeoutInSeconds: 1,
     );
 
-    expect(info.error, UserException("Hello!"));
+    expect(info.error, const UserException("Hello!"));
     expect(info.processedError, null);
-    expect(info.state.text, "0,1,2,3");
+    expect(info.state.text, "0,1,2");
     expect(info.ini, false);
   });
 
@@ -1141,7 +1265,7 @@ void main() {
         .waitConditionGetLast((info) => info.state.text == "0",
             testImmediately: false, timeoutInSeconds: 1)
         .then((_) => throw AssertionError(), onError: expectAsync1((Object error) {
-      expect(error, TypeMatcher<StoreException>());
+      expect(error, const TypeMatcher<StoreException>());
       expect(error.toString(), "Timeout.");
     }));
 
@@ -1274,6 +1398,34 @@ void main() {
     expect(info2.state.text, "0,1");
     expect(storeTester1.state.text, "0,1,2,3,4");
     expect(storeTester2.state.text, "0,1,2,3,4");
+  });
+
+  ///////////////////////////////////////////////////////////////////////////////
+
+  test('StoreTester.dispatchState.', () async {
+    var storeTester = createStoreTester();
+    expect(storeTester.state.text, "0");
+
+    storeTester.dispatch(Action1());
+    storeTester.dispatch(Action2());
+
+    // Remove state "1" from the stream, but not state "2".
+    await storeTester.waitUntil(Action1);
+    expect(storeTester.lastInfo.state.text, "0,1");
+    expect(storeTester.state.text, "0,1,2");
+
+    // When we dispatchState, it empties the stream.
+    // This means state "2" will be removed.
+    await storeTester.dispatchState(AppState("my state"));
+    expect(storeTester.lastInfo.state.text, "my state");
+    expect(storeTester.state.text, "my state");
+    storeTester.dispatch(Action3());
+    expect(storeTester.state.text, "my state,3");
+    expect(storeTester.lastInfo.state.text, "my state");
+
+    await storeTester.waitUntil(Action3);
+    expect(storeTester.lastInfo.state.text, "my state,3");
+    expect(storeTester.state.text, "my state,3");
   });
 
   ///////////////////////////////////////////////////////////////////////////////

@@ -6,11 +6,12 @@ import 'package:flutter/material.dart';
 
 Store<int> store;
 
-/// This example shows a counter and a button.
-/// When the button is tapped, the counter will increment synchronously.
+/// This example shows how to prevent creating view-models from invalid states.
+/// When the button is tapped, the counter will increment 5 times, synchronously.
+/// So, the sequence would be 0, 5, 10, 15, 20, 25 etc.
 ///
-/// In this simple example, the app state is simply a number (the counter),
-/// and thus the store is defined as `Store<int>`. The initial state is 0.
+/// However, we consider odd numbers invalid.
+/// Therefore, it will display 0, 4, 10, 14, 20, 24 etc.
 ///
 void main() {
   store = Store<int>(initialState: 0);
@@ -40,11 +41,6 @@ class IncrementAction extends ReduxAction<int> {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-/// This widget is a connector.
-/// It connects the store to [MyHomePage] (the dumb-widget).
-/// Each time the state changes, it creates a view-model, and compares it
-/// with the view-model created with the previous state.
-/// Only if the view-model changed, the connector rebuilds.
 class MyHomePageConnector extends StatelessWidget {
   MyHomePageConnector({Key key}) : super(key: key);
 
@@ -52,6 +48,10 @@ class MyHomePageConnector extends StatelessWidget {
   Widget build(BuildContext context) {
     return StoreConnector<int, ViewModel>(
       vm: Factory(this),
+      //
+      // Should update the view-model only when the counter is even.
+      shouldUpdateModel: (int count) => count % 2 == 0,
+      //
       builder: (BuildContext context, ViewModel vm) => MyHomePage(
         counter: vm.counter,
         onIncrement: vm.onIncrement,
@@ -65,27 +65,21 @@ class Factory extends VmFactory<int, MyHomePageConnector> {
   Factory(widget) : super(widget);
 
   @override
-  ViewModel fromStore() => ViewModel(
-        counter: state,
-        onIncrement: () => dispatch(IncrementAction(amount: 1)),
-      );
+  ViewModel fromStore() {
+    return ViewModel(
+      counter: state,
+      onIncrement: () {
+        // Increment 5 times.
+        dispatch(IncrementAction(amount: 1));
+        dispatch(IncrementAction(amount: 1));
+        dispatch(IncrementAction(amount: 1));
+        dispatch(IncrementAction(amount: 1));
+        dispatch(IncrementAction(amount: 1));
+      },
+    );
+  }
 }
 
-/// A view-model is a helper object to a [StoreConnector] widget. It holds the
-/// part of the Store state the corresponding dumb-widget needs, and may also
-/// convert this state part into a more convenient format for the dumb-widget
-/// to work with.
-///
-/// You must implement equals/hashcode for the view-model class to work.
-/// Otherwise, the [StoreConnector] will think the view-model changed everytime,
-/// and thus will rebuild everytime. This won't create any visible problems
-/// to your app, but is inefficient and may be slow.
-///
-/// By extending the [Vm] class you can implement equals/hashcode without
-/// having to override these methods. Instead, simply list all fields
-/// (which are not immutable, like functions) to the [equals] parameter
-/// in the constructor.
-///
 class ViewModel extends Vm {
   final int counter;
   final VoidCallback onIncrement;
@@ -98,9 +92,6 @@ class ViewModel extends Vm {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-/// This is the "dumb-widget". It has no notion of the store, the state, the
-/// connector or the view-model. It just gets the parameters it needs to display
-/// itself, and callbacks it should call when reacting to the user interface.
 class MyHomePage extends StatelessWidget {
   final int counter;
   final VoidCallback onIncrement;
@@ -119,7 +110,12 @@ class MyHomePage extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('You have pushed the button this many times:'),
+            const Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Text('Each time you push the button it increments 5 times.\n\n'
+                  'But only even values are valid to appear in the UI.\n\n'
+                  'This demonstrates the use of StoreConnector.shouldUpdateModel.'),
+            ),
             Text('$counter', style: const TextStyle(fontSize: 30))
           ],
         ),

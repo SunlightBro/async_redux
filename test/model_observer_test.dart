@@ -1,6 +1,5 @@
-import 'dart:async';
-
 import 'package:async_redux/async_redux.dart';
+import 'package:async_redux/src/store_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -129,7 +128,7 @@ class _MyAction extends ReduxAction<_StateTest> {
   _MyAction(this.text, this.number);
 
   @override
-  FutureOr<_StateTest> reduce() => _StateTest(text, number);
+  _StateTest reduce() => _StateTest(text, number);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

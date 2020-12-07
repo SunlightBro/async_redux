@@ -1,5 +1,5 @@
-import 'package:async_redux/async_redux.dart'
-    show NavigateAction, NavigateType, Store, StoreProvider;
+import 'package:async_redux/async_redux.dart';
+import 'package:async_redux/src/store_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -8,9 +8,9 @@ Store<AppState> store;
 final navigatorKey = GlobalKey<NavigatorState>();
 
 final routes = {
-  "/": (BuildContext context) => MyPage(Key("page1")),
-  "/page2": (BuildContext context) => MyPage(Key("page2")),
-  "/page3": (BuildContext context) => MyPage(Key("page3")),
+  "/": (BuildContext context) => MyPage(const Key("page1")),
+  "/page2": (BuildContext context) => MyPage(const Key("page2")),
+  "/page3": (BuildContext context) => MyPage(const Key("page3")),
 };
 
 class AppState {}
@@ -29,70 +29,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class _NavAction extends StatelessWidget {
-  final String route;
-  final NavigateType navigateType;
-  final RoutePredicate predicate;
-
-  _NavAction(
-    Key key, {
-    this.route,
-    @required this.navigateType,
-    this.predicate,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () {
-        NavigateAction<AppState> _action;
-
-        switch (navigateType) {
-          case NavigateType.push:
-            {
-              // TODO: Test this one.
-            }
-            break;
-          case NavigateType.pushNamedAndRemoveAll:
-            {
-              _action = NavigateAction.pushNamedAndRemoveAll(route);
-            }
-            break;
-          case NavigateType.pushReplacementNamed:
-            {
-              _action = NavigateAction.pushReplacementNamed(route);
-            }
-            break;
-          case NavigateType.pushNamedAndRemoveUntil:
-            {
-              _action = NavigateAction.pushNamedAndRemoveUntil(route, predicate: predicate);
-            }
-            break;
-          case NavigateType.pushNamed:
-            {
-              _action = NavigateAction.pushNamed(route);
-            }
-            break;
-
-          case NavigateType.popUntil:
-            {
-              _action = NavigateAction.popUntil(route);
-            }
-            break;
-          case NavigateType.pop:
-            {
-              _action = NavigateAction.pop();
-            }
-            break;
-        }
-
-        store.dispatch(_action);
-      },
-      child: SizedBox(height: 10, width: 10),
-    );
-  }
-}
-
 class MyPage extends StatelessWidget {
   MyPage(Key key) : super(key: key);
 
@@ -103,46 +39,38 @@ class MyPage extends StatelessWidget {
         children: <Widget>[
           Text("Current route: ${NavigateAction.getCurrentNavigatorRouteName(context)}"),
           //
-          _NavAction(
-            Key("pushNamedPage2"),
-            route: "/page2",
-            navigateType: NavigateType.pushNamed,
-          ),
-          _NavAction(
-            Key("pushNamedPage3"),
-            route: "/page3",
-            navigateType: NavigateType.pushNamed,
+          RawMaterialButton(
+              key: const Key("pushNamedPage2"),
+              onPressed: () => store.dispatch(NavigateAction.pushNamed("/page2"))),
+          //
+          RawMaterialButton(
+              key: const Key("pushNamedPage3"),
+              onPressed: () => store.dispatch(NavigateAction.pushNamed("/page3"))),
+          //
+          RawMaterialButton(
+              key: const Key("pushNamedAndRemoveAllPage1"),
+              onPressed: () => store.dispatch(NavigateAction.pushNamedAndRemoveAll("/"))),
+          //
+          RawMaterialButton(
+              key: const Key("pushReplacementNamedPage2"),
+              onPressed: () => store.dispatch(NavigateAction.pushReplacementNamed("/page2"))),
+          //
+          RawMaterialButton(
+              key: const Key("pushNamedAndRemoveUntilPage2"),
+              onPressed: () => store.dispatch(
+                      NavigateAction.pushNamedAndRemoveUntil("/page2", (Route<dynamic> route) {
+                    return route.settings.name == "/";
+                  }))),
+          //
+          RawMaterialButton(
+              key: const Key("popUntilPage1"),
+              onPressed: () => store.dispatch(NavigateAction.popUntilRouteName("/"))),
+          //
+          RawMaterialButton(
+            key: const Key("pop"),
+            onPressed: () => store.dispatch(NavigateAction.pop()),
           ),
           //
-          _NavAction(
-            Key("pushNamedAndRemoveAllPage1"),
-            route: "/",
-            navigateType: NavigateType.pushNamedAndRemoveAll,
-          ),
-          //
-          _NavAction(
-            Key("pushReplacementNamedPage2"),
-            route: "/page2",
-            navigateType: NavigateType.pushReplacementNamed,
-          ),
-          _NavAction(
-            Key("pushNamedAndRemoveUntilPage2"),
-            route: "/page2",
-            predicate: (Route<dynamic> route) {
-              return route.settings.name == "/";
-            },
-            navigateType: NavigateType.pushNamedAndRemoveUntil,
-          ),
-          //
-          _NavAction(
-            Key("popUntilPage1"),
-            route: "/",
-            navigateType: NavigateType.popUntil,
-          ),
-          _NavAction(
-            Key("pop"),
-            navigateType: NavigateType.pop,
-          ),
         ],
       ),
     );
@@ -157,26 +85,27 @@ void main() {
     store = Store<AppState>(initialState: AppState());
   });
 
-  final Finder page1Finder = find.byKey(Key("page1"));
-  final Finder page1IncludeIfOffstageFinder = find.byKey(Key("page1"), skipOffstage: false);
-  final Finder pushAndRemoveAllPage1Finder = find.byKey(Key("pushNamedAndRemoveAllPage1"));
-  final Finder popUntilPage1Finder = find.byKey(Key("popUntilPage1"));
+  final Finder page1Finder = find.byKey(const Key("page1"));
+  final Finder page1IncludeIfOffstageFinder = find.byKey(const Key("page1"), skipOffstage: false);
+  final Finder pushAndRemoveAllPage1Finder = find.byKey(const Key("pushNamedAndRemoveAllPage1"));
+  final Finder popUntilPage1Finder = find.byKey(const Key("popUntilPage1"));
 
-  final Finder page2Finder = find.byKey(Key("page2"));
-  final Finder page2IncludeIfOffstageFinder = find.byKey(Key("page2"), skipOffstage: false);
-  final Finder pushPage2Finder = find.byKey(Key("pushNamedPage2"));
-  final Finder pushReplacementPage2Finder = find.byKey(Key("pushReplacementNamedPage2"));
-  final Finder pushNamedAndRemoveUntilPage2Finder = find.byKey(Key("pushNamedAndRemoveUntilPage2"));
+  final Finder page2Finder = find.byKey(const Key("page2"));
+  final Finder page2IncludeIfOffstageFinder = find.byKey(const Key("page2"), skipOffstage: false);
+  final Finder pushPage2Finder = find.byKey(const Key("pushNamedPage2"));
+  final Finder pushReplacementPage2Finder = find.byKey(const Key("pushReplacementNamedPage2"));
+  final Finder pushNamedAndRemoveUntilPage2Finder =
+      find.byKey(const Key("pushNamedAndRemoveUntilPage2"));
 
-  final Finder page3Finder = find.byKey(Key("page3"));
-  final Finder page3IncludeIfOffstageFinder = find.byKey(Key("page3"), skipOffstage: false);
-  final Finder pushPage3Finder = find.byKey(Key("pushNamedPage3"));
+  final Finder page3Finder = find.byKey(const Key("page3"));
+  final Finder page3IncludeIfOffstageFinder = find.byKey(const Key("page3"), skipOffstage: false);
+  final Finder pushPage3Finder = find.byKey(const Key("pushNamedPage3"));
 
-  final Finder popFinder = find.byKey(Key("pop"));
+  final Finder popFinder = find.byKey(const Key("pop"));
 
   /////////////////////////////////////////////////////////////////////////////
 
-  testWidgets(NavigateType.pushNamed.toString(), (WidgetTester tester) async {
+  testWidgets("pushNamed", (WidgetTester tester) async {
     await tester.pumpWidget(MyApp());
     await tester.pumpAndSettle();
 
@@ -205,7 +134,7 @@ void main() {
 
   /////////////////////////////////////////////////////////////////////////////
 
-  testWidgets(NavigateType.pushNamedAndRemoveAll.toString(), (WidgetTester tester) async {
+  testWidgets("pushNamedAndRemoveAll", (WidgetTester tester) async {
     await tester.pumpWidget(MyApp());
     await tester.pumpAndSettle();
 
@@ -250,7 +179,7 @@ void main() {
 
   /////////////////////////////////////////////////////////////////////////////
 
-  testWidgets(NavigateType.pushReplacementNamed.toString(), (WidgetTester tester) async {
+  testWidgets("pushReplacementNamed", (WidgetTester tester) async {
     await tester.pumpWidget(MyApp());
     await tester.pumpAndSettle();
 
@@ -287,7 +216,7 @@ void main() {
 
   /////////////////////////////////////////////////////////////////////////////
 
-  testWidgets(NavigateType.pushNamedAndRemoveUntil.toString(), (WidgetTester tester) async {
+  testWidgets("pushNamedAndRemoveUntil", (WidgetTester tester) async {
     await tester.pumpWidget(MyApp());
     await tester.pumpAndSettle();
 
@@ -337,7 +266,7 @@ void main() {
 
   /////////////////////////////////////////////////////////////////////////////
 
-  testWidgets(NavigateType.pop.toString(), (WidgetTester tester) async {
+  testWidgets("pop", (WidgetTester tester) async {
     await tester.pumpWidget(MyApp());
     await tester.pumpAndSettle();
 
@@ -380,7 +309,7 @@ void main() {
     expect(page3IncludeIfOffstageFinder, findsNothing);
   });
   //
-  testWidgets(NavigateType.popUntil.toString(), (WidgetTester tester) async {
+  testWidgets("popUntil", (WidgetTester tester) async {
     await tester.pumpWidget(MyApp());
     await tester.pumpAndSettle();
 

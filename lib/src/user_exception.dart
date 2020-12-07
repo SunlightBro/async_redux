@@ -1,11 +1,5 @@
-import 'dart:io';
 import 'dart:ui';
-
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
-
-import '../async_redux.dart';
+import 'package:async_redux/async_redux.dart';
 
 // Developed by Marcelo Glasberg (Aug 2019).
 // For more info, see: https://pub.dartlang.org/packages/async_redux
@@ -64,8 +58,31 @@ class UserException implements Exception {
 
   const UserException(this.msg, {this.cause, this.code});
 
-  String dialogTitle([Locale locale]) =>
-      (cause is UserException || cause is String) ? _codeAsTextOrMsg(locale) : "";
+  /// Returns the first cause which, recursively, is NOT a UserException.
+  /// If not found, returns null.
+  Object hardCause() {
+    if (cause is UserException)
+      return (cause as UserException).hardCause();
+    else
+      return cause;
+  }
+
+  /// Returns a deep copy of this exception, but stopping at, and not
+  /// including, the first [cause] which is not a UserException.
+  UserException withoutHardCause() => UserException(
+        msg,
+        cause: (cause is UserException)
+            ? //
+            (cause as UserException).withoutHardCause()
+            : null,
+        code: code,
+      );
+
+  String dialogTitle([Locale locale]) => //
+      (cause is UserException || cause is String)
+          ? //
+          _codeAsTextOrMsg(locale)
+          : "";
 
   String dialogContent([Locale locale]) {
     if (cause is UserException)
@@ -78,25 +95,32 @@ class UserException implements Exception {
 
   String _dialogTitleAndContent([Locale locale]) => (cause is UserException)
       ? joinExceptionMainAndCause(
-          locale, _codeAsTextOrMsg(locale), (cause as UserException)._codeAsTextOrMsg(locale))
+          locale,
+          _codeAsTextOrMsg(locale),
+          (cause as UserException)._codeAsTextOrMsg(locale),
+        )
       : _codeAsTextOrMsg(locale);
 
   /// Return the string that join the main message and the reason message.
   /// You can change this variable to inject another way to join them.
-  static var joinExceptionMainAndCause = (Locale locale, String mainMsg, String causeMsg) =>
+  static var joinExceptionMainAndCause = (
+    Locale locale,
+    String mainMsg,
+    String causeMsg,
+  ) =>
       "$mainMsg\n\n${_getReasonFromLocale(locale) ?? "Reason"}: $causeMsg";
 
-  static _getReasonFromLocale(Locale locale) {
+  static String _getReasonFromLocale(Locale locale) {
     if (locale == null)
       return null;
     else {
       var reason = _reason[locale.toString()];
-      if (reason == null) reason = _reason[locale.languageCode];
+      reason ??= _reason[locale.languageCode];
       return reason;
     }
   }
 
-  static const Map _reason = {
+  static const Map<String, String> _reason = {
     "en": "Reason", // English
     "es": "Razón", // Spanish
     "fr": "Raison", // French
@@ -181,136 +205,5 @@ class UserExceptionAction<St> extends ReduxAction<St> {
   @override
   Future<St> reduce() async => throw exception;
 }
-
-// /////////////////////////////////////////////////////////////////////////////
-
-/// Use it like this:
-///
-/// ```
-/// class MyApp extends StatelessWidget {
-///   @override
-///   Widget build(BuildContext context)
-///     => StoreProvider<AppState>(
-///       store: store,
-///       child: MaterialApp(
-///           home: UserExceptionDialog<AppState>(
-///             child: MyHomePage(),
-///           )));
-/// }
-///
-/// ```
-///
-/// For more info, see: https://pub.dartlang.org/packages/async_redux
-///
-class UserExceptionDialog<St> extends StatelessWidget {
-  final Widget child;
-  final ShowUserExceptionDialog onShowUserExceptionDialog;
-
-  UserExceptionDialog({
-    @required this.child,
-    this.onShowUserExceptionDialog,
-  }) : assert(child != null);
-
-  @override
-  Widget build(BuildContext context) {
-    return StoreConnector<St, _ViewModel>(
-      model: _ViewModel(),
-      builder: (context, vm) {
-        return _Widget(child, vm.error, onShowUserExceptionDialog);
-      },
-    );
-  }
-}
-
-class _Widget extends StatefulWidget {
-  final Widget child;
-  final Event<UserException> error;
-  final ShowUserExceptionDialog onShowUserExceptionDialog;
-
-  _Widget(
-    this.child,
-    this.error,
-    ShowUserExceptionDialog onShowUserExceptionDialog,
-  ) : onShowUserExceptionDialog = onShowUserExceptionDialog ?? _defaultUserExceptionDialog;
-
-  static void _defaultUserExceptionDialog(
-    BuildContext context,
-    UserException userException,
-  ) {
-    if (!kIsWeb && (Platform.isMacOS || Platform.isIOS)) {
-      showCupertinoDialog(
-        context: context,
-        builder: (BuildContext context) => CupertinoAlertDialog(
-          title: Text(userException.dialogTitle()),
-          content: Text(userException.dialogContent()),
-          actions: [
-            CupertinoDialogAction(
-              child: Text("OK"),
-              onPressed: () => Navigator.of(context).pop(),
-            )
-          ],
-        ),
-      );
-    } else
-      showDialog(
-        context: context,
-        builder: (BuildContext context) => AlertDialog(
-          title: Text(userException.dialogTitle()),
-          content: Text(userException.dialogContent()),
-          actions: [
-            FlatButton(
-              child: Text("OK"),
-              onPressed: () => Navigator.of(context).pop(),
-            )
-          ],
-        ),
-      );
-  }
-
-  @override
-  _WidgetState createState() => _WidgetState();
-}
-
-class _WidgetState extends State<_Widget> {
-  @override
-  void didUpdateWidget(_Widget oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    UserException userException = widget.error.consume();
-
-    if (userException != null)
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        widget.onShowUserExceptionDialog(context, userException);
-      });
-  }
-
-  @override
-  Widget build(BuildContext context) => widget.child;
-}
-
-class _ViewModel extends BaseModel {
-  _ViewModel();
-
-  Event<UserException> error;
-
-  _ViewModel.build({@required this.error});
-
-  @override
-  _ViewModel fromStore() => _ViewModel.build(
-        error: Event(store.getAndRemoveFirstError()),
-      );
-
-  /// Does not respect equals contract:
-  /// A==B ➜ true only if B.error.state is not null.
-  @override
-  bool operator ==(Object other) {
-    return error.state == null;
-  }
-
-  @override
-  int get hashCode => error.hashCode;
-}
-
-typedef ShowUserExceptionDialog = void Function(BuildContext context, UserException userException);
 
 // /////////////////////////////////////////////////////////////////////////////
