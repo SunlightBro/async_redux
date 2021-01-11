@@ -1121,18 +1121,27 @@ abstract class VmFactory<St, T> {
   Vm fromStore();
 
   void _setStore(St state, Store store) {
+    if (_state != null) throw AssertionError("State is final.");
+    _store = store;
     _state = state;
     _dispatch = store.dispatch;
     _dispatchFuture = store.dispatchFuture;
     _getAndRemoveFirstError = store.getAndRemoveFirstError;
   }
 
+  Store<St> _store;
   St _state;
   Dispatch<St> _dispatch;
   DispatchFuture<St> _dispatchFuture;
   UserException Function() _getAndRemoveFirstError;
 
+  /// The state the store was holding when the factory and the view-model were created.
+  /// This state is final inside of the factory.
   St get state => _state;
+
+  /// The current (most recent) store state.
+  /// This will return the current state the store holds at the time the method is called.
+  St currentState() => _store.state;
 
   Dispatch<St> get dispatch => _dispatch;
 
@@ -1286,7 +1295,7 @@ typedef OnInitialBuildCallback<Model> = void Function(Model viewModel);
 // /////////////////////////////////////////////////////////////////////////////
 
 abstract class StoreConnectorInterface<St, Model> {
-  VmFactory get vm;
+  VmFactory Function() get vm;
 
   StoreConverter<St, Model> get converter;
 
