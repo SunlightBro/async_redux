@@ -144,10 +144,14 @@ var store = Store<AppState>(
   initialState: state,
 );
 ```  
-
-Note: _Your state can be any immutable object, 
+                             
+Note: _Your state can be any **immutable** object, 
 but typically you create a class called `AppState` to help with the state creation and manipulation.
-I later give some [recommendations](#state-declaration) on how to create this class._ 
+I later give some [recommendations](#state-declaration) on how to create this class.
+In special, you can use the 
+<a href="https://pub.dev/packages/fast_immutable_collections">fast_immutable_collections</a> package 
+when you need immutable lists, sets, maps and multimaps._ 
+                             
 
 <br>
 
@@ -2851,6 +2855,7 @@ Reducers as methods of action classes were shown to me by Scott Stoll and Simon 
 
 *The Flutter packages I've authored:* 
 * <a href="https://pub.dev/packages/async_redux">async_redux</a>
+* <a href="https://pub.dev/packages/fast_immutable_collections">fast_immutable_collections</a>
 * <a href="https://pub.dev/packages/provider_for_redux">provider_for_redux</a>
 * <a href="https://pub.dev/packages/i18n_extension">i18n_extension</a>
 * <a href="https://pub.dev/packages/align_positioned">align_positioned</a>
